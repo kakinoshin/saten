@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+iced = {version = "0.9", features = ["image"]}
+#iced_core = "0.9"
+iced_wgpu = "0.10"
+#iced_winit = "0.9"
+#iced_widget = "0.1"
