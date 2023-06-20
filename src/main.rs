@@ -10,6 +10,8 @@ use iced::widget::{
 };
 use std::path::PathBuf;
 
+mod readrar;
+
 pub fn main() -> iced::Result {
     // フォントを指定しつつ実行する。
     Events::run(Settings {
@@ -22,6 +24,9 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Default)]
 struct Events {
     path: PathBuf,
+    files : Vec<readrar::MemberFile>,
+    f_idx : usize,
+    f_max : usize,
 }
 
 // 何らかの変更があったときに飛ぶメッセージ。今回はイベント発生のみ。
@@ -57,9 +62,55 @@ impl Application for Events {
                 if let iced::event::Event::Window(we) = event {
                     if let iced::window::Event::FileDropped(path) = we {
                         self.path = path;
+
+                        // read rar file
+                        if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
+                            self.files = Vec::new();
+                            readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
+                            for f in &self.files {
+                                println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+                            }
+                            self.f_idx = 0;
+                            self.f_max = self.files.len();
+                        } else {
+                            self.f_idx = 0;
+                            self.f_max = 0;
+                        }
+                    }
+                } else if let iced::event::Event::Keyboard(we) = event {
+                    match we {
+                        iced::keyboard::Event::KeyPressed {
+                            key_code: iced::keyboard::KeyCode::Left,
+                            modifiers,
+                        } => {
+                            // if modifiers.shift() {
+                            //     widget::focus_previous()
+                            // } else {
+                            //     widget::focus_next()
+                            // }
+                            println!("Left");
+                            if self.f_idx > 1 {
+                                self.f_idx -= 1;
+                            }
+                        },
+                        iced::keyboard::Event::KeyPressed {
+                            key_code: iced::keyboard::KeyCode::Right,
+                            modifiers,
+                        } => {
+                            // if modifiers.shift() {
+                            //     widget::focus_previous()
+                            // } else {
+                            //     widget::focus_next()
+                            // }
+                            println!("Right");
+                            if self.f_idx + 1 < self.f_max {
+                                self.f_idx += 1;
+                            }
+                        },
+                        _ => {},
                     }
                 }
-            }
+            },
         };
 
         Command::none()
@@ -81,15 +132,31 @@ impl Application for Events {
         let path = Container::new(Text::new(p).size(20)).padding(4);
 
         // 画像表示部
-        let image = Container::new(
-            Image::new(self.path.clone())
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .height(Length::Fill)
-        .width(Length::Fill)
-        .align_x(alignment::Horizontal::Center)
-        .align_y(alignment::Vertical::Center);
+        let image;
+        if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
+            let f = &self.files[self.f_idx];
+            println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+            let data = readrar::read_data(self.path.to_str().unwrap(), f.offset, f.size);
+            let handle = iced::widget::image::Handle::from_memory(data);
+
+            image = Container::new(
+                iced::widget::image::Viewer::new(handle)
+            )
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center);
+        } else {
+            image = Container::new(
+                Image::new(self.path.clone())
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center);
+        }
         
         let content = Column::new()
             .width(Length::Fill)
