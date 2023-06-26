@@ -39,6 +39,9 @@ pub fn read_rar(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box
                 if btype == 2 {
                     println!("== File header ==");
                     offset += check_header_file(&buf, offset, files);
+                } else if btype == 3 {
+                    println!("== Service header ==");
+                    offset += check_header_service(&buf, offset);
                 } else {
                     println!("there is no file header");
                     break;
@@ -553,6 +556,270 @@ fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>)
             fsize: file_size,
         });
     }
+
+    // return total header size
+    //headerlen + data_size as usize
+    offset - pos
+}
+
+fn check_header_service(data : &Vec<u8>, pos : usize) -> usize {
+    let mut offset : usize = pos;
+    let mut vintlen : u8 = 0;
+    let mut headerlen : usize = 0;
+
+    let htype : u64;
+    let hsize : u64;
+
+    if data.len() >= pos + 6 {
+        // skip crc
+        offset += 4;
+
+        // header size
+        (hsize, vintlen) = read_vint(&data, offset);
+        println!("debug: hsize = {:?}, vintlen = {:?}", hsize, vintlen);
+        if vintlen == std::u8::MAX {
+            return std::usize::MAX;
+        }
+        offset += vintlen as usize;
+
+        // calc main archive header size
+        headerlen = 4 + vintlen as usize + hsize as usize;
+
+        // header type
+        (htype, vintlen) = read_vint(&data, offset);
+        if vintlen == std::u8::MAX {
+            return std::usize::MAX;
+        }
+        offset += vintlen as usize;
+    } else {
+        htype = 0;
+        hsize = 0;
+    }
+
+    if htype != 3 || data.len() < pos + hsize as usize {
+        return std::usize::MAX;
+    }
+
+    // Header flags
+    let hflag;
+    (hflag, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+
+    let is_extra;
+    let is_data;
+    let is_unknown;
+    let is_continue_blk_fromprev;
+    let is_continue_blk_tonext;
+    let is_file_blk;
+    let is_preserve_child;
+    if hflag & 0x01 == 0x01 {
+        is_extra = true;
+    } else {
+        is_extra = false;
+    }
+    if hflag & 0x02 == 0x02 {
+        is_data = true;
+    } else {
+        is_data = false;
+    }
+    if hflag & 0x04 == 0x04 {
+        is_unknown = true;
+    } else {
+        is_unknown = false;
+    }
+    if hflag & 0x08 == 0x08 {
+        is_continue_blk_fromprev = true;
+    } else {
+        is_continue_blk_fromprev = false;
+    }
+    if hflag & 0x10 == 0x10 {
+        is_continue_blk_tonext = true;
+    } else {
+        is_continue_blk_tonext = false;
+    }
+    if hflag & 0x20 == 0x20 {
+        is_file_blk = true;
+    } else {
+        is_file_blk = false;
+    }
+    if hflag & 0x40 == 0x40 {
+        is_preserve_child = true;
+    } else {
+        is_preserve_child = false;
+    }
+
+    println!("== Header Flags ==");
+    println!("Extra area             = {:?}", is_extra);
+    println!("Data area              = {:?}", is_data);
+    println!("Unknown area           = {:?}", is_unknown);
+    println!("Continue from previous = {:?}", is_continue_blk_fromprev);
+    println!("Continue to next       = {:?}", is_continue_blk_tonext);
+    println!("File block             = {:?}", is_file_blk);
+    println!("Preserve Child block   = {:?}", is_preserve_child);
+
+    // Extra area size
+    let extra_size;
+    if is_extra {
+        (extra_size, vintlen) = read_vint(&data, offset);
+        if vintlen == std::u8::MAX {
+            return std::usize::MAX;
+        }
+        offset += vintlen as usize;
+        println!("Extra area size = {:?}", extra_size)
+    } else {
+        extra_size = 0;
+    }
+
+    // Data size
+    let data_size;
+    if is_data {
+        (data_size, vintlen) = read_vint(&data, offset);
+        if vintlen == std::u8::MAX {
+            return std::usize::MAX;
+        }
+        offset += vintlen as usize;
+        println!("Data size = {:?}", data_size)
+    } else {
+        data_size = 0;
+    }
+    
+    // File flag
+    let fflag;
+    (fflag, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+
+    let is_dir;
+    let is_unixtime;
+    let is_crc32;
+    let is_unknown_size;
+    if fflag & 0x01 == 0x01 {
+        is_dir = true;
+    } else {
+        is_dir = false;
+    }
+    if fflag & 0x02 == 0x02 {
+        is_unixtime = true;
+    } else {
+        is_unixtime = false;
+    }
+    if fflag & 0x04 == 0x04 {
+        is_crc32 = true;
+    } else {
+        is_crc32 = false;
+    }
+    if fflag & 0x08 == 0x08 {
+        is_unknown_size = true;
+    } else {
+        is_unknown_size = false;
+    }
+    println!("== File Flags ==");
+    println!("Directory file system object = {:?}", is_dir);
+    println!("Unix Time field              = {:?}", is_unixtime);
+    println!("CRC32                        = {:?}", is_crc32);
+    println!("Unknown unpacked size        = {:?}", is_unknown_size);
+
+    // Unpacked size
+    let file_size;
+    (file_size, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+    println!("Unpacked size = {:?}", file_size);
+
+    // Attributes
+    let file_attr;
+    (file_attr, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+    println!("File Attrubutes = {:?}", file_attr);
+
+    // mtime
+    let file_mtime : u32;
+    if is_unixtime {
+        file_mtime = (data[offset] as u32) << 24 |
+                     (data[offset+1] as u32) << 16 |
+                     (data[offset+2] as u32) << 8 |
+                     (data[offset+3] as u32);
+        offset += 4;
+    } else {
+        file_mtime = 0;
+    }
+    println!("File mtime = {:#010X}", file_mtime);
+    println!("File mtime = {:?}", file_mtime);
+
+    // Data CRC32
+    let file_crc32 : u32;
+    if is_crc32 {
+        file_crc32 = (data[offset] as u32) << 24 |
+                     (data[offset+1] as u32) << 16 |
+                     (data[offset+2] as u32) << 8 |
+                     (data[offset+3] as u32);
+        offset += 4;
+    } else {
+        file_crc32 = 0;
+    }
+    println!("File CRC32 = {:#010X}", file_crc32);
+
+    // Compression information
+    let file_comp;
+    (file_comp, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+    println!("File Compression = {:#0X}", file_comp);
+
+    // Host OS (0:Windows/1:Unix)
+    let file_hostos;
+    (file_hostos, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+    println!("Host OS = {:?}", file_hostos);
+
+    // Name length
+    let file_namelen;
+    (file_namelen, vintlen) = read_vint(&data, offset);
+    if vintlen == std::u8::MAX {
+        return std::usize::MAX;
+    }
+    offset += vintlen as usize;
+    println!("File name length = {:?}", file_namelen);
+
+    // File Name
+    let file_name = std::str::from_utf8(&data[offset..(offset+file_namelen as usize)]).unwrap();
+    offset += file_namelen as usize;
+    println!("File name = {:?}", file_name);
+    
+    // Extra area
+    if is_extra {
+        // skip Extra area
+        offset += extra_size as usize;
+    }
+    println!("debug: pos = {:?}", pos);
+    println!("debug: headerlen = {:?}", headerlen);
+    println!("debug: offset = {:?}", offset);
+
+    // Data area
+    let data_offset : u64;
+    if is_data {
+        // skip Data area
+        data_offset = offset as u64;
+        offset += data_size as usize;
+    } else {
+        data_offset = 0;
+    }
+    println!("debug: offset = {:?}", offset);
 
     // return total header size
     //headerlen + data_size as usize
