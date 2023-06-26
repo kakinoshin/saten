@@ -10,11 +10,16 @@ pub struct MemberFile {
     pub fsize: u64,
 }
 
-pub fn read_rar(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
     let mut file = File::open(filename)?;
     let mut buf = Vec::new();
-    let mut offset : usize = 0;
     let _ = file.read_to_end(&mut buf)?;
+
+    read_rar(&buf, files)
+}
+
+pub fn read_rar(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut offset : usize = 0;
 
     let (pos, is_sign) = check_rarsign(&buf);
     println!("signature pos : {:?}", pos);
@@ -826,7 +831,7 @@ fn check_header_service(data : &Vec<u8>, pos : usize) -> usize {
     offset - pos
 }
 
-pub fn read_data(filename : &str, offset : u64, size : u64) -> Vec<u8> {
+pub fn read_data_from_file(filename : &str, offset : u64, size : u64) -> Vec<u8> {
     let mut file = match File::open(filename) {
         Ok(f) => f,
         Err(err) => panic!("file error: {}", err)
@@ -834,5 +839,9 @@ pub fn read_data(filename : &str, offset : u64, size : u64) -> Vec<u8> {
     let mut buf = Vec::new();
     let _ = file.read_to_end(&mut buf);
 
+    buf[offset as usize..offset as usize +size as usize].to_owned()
+}
+
+pub fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
     buf[offset as usize..offset as usize +size as usize].to_owned()
 }

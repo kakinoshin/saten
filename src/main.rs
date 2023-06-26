@@ -9,6 +9,8 @@ use iced::widget::{
     Container, Text, Column, Image, 
 };
 use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
 
 mod readrar;
 
@@ -27,6 +29,7 @@ struct Events {
     files : Vec<readrar::MemberFile>,
     f_idx : usize,
     f_max : usize,
+    buf   : Vec<u8>,
 }
 
 // 何らかの変更があったときに飛ぶメッセージ。今回はイベント発生のみ。
@@ -66,7 +69,14 @@ impl Application for Events {
                         // read rar file
                         if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
                             self.files = Vec::new();
-                            readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
+                            //readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
+                            let mut file = match File::open(self.path.to_str().unwrap()) {
+                                Ok(f) => f,
+                                Err(err) => panic!("file error: {}", err)
+                            };
+                            self.buf = Vec::new();
+                            let _ = file.read_to_end(&mut self.buf);
+                            _ = readrar::read_rar(&self.buf, &mut self.files);
                             for f in &self.files {
                                 println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
                             }
@@ -136,7 +146,7 @@ impl Application for Events {
         if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
             let f = &self.files[self.f_idx];
             println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-            let data = readrar::read_data(self.path.to_str().unwrap(), f.offset, f.size);
+            let data = readrar::read_data(&self.buf, f.offset, f.size);
             let handle = iced::widget::image::Handle::from_memory(data);
 
             image = Container::new(
