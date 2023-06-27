@@ -6,7 +6,7 @@ use iced::{
     Theme,
 };
 use iced::widget::{
-    Container, Text, Column, Image, 
+    Container, Text, Column, Row, Image, 
 };
 use std::path::PathBuf;
 use std::fs::File;
@@ -99,8 +99,8 @@ impl Application for Events {
                             //     widget::focus_next()
                             // }
                             println!("Left");
-                            if self.f_idx > 1 {
-                                self.f_idx -= 1;
+                            if self.f_idx + 2 < self.f_max {
+                                self.f_idx += 2;
                             }
                         },
                         iced::keyboard::Event::KeyPressed {
@@ -113,6 +113,34 @@ impl Application for Events {
                             //     widget::focus_next()
                             // }
                             println!("Right");
+                            if self.f_idx > 2 {
+                                self.f_idx -= 2;
+                            }
+                        },
+                        iced::keyboard::Event::KeyPressed {
+                            key_code: iced::keyboard::KeyCode::Up,
+                            modifiers,
+                        } => {
+                            // if modifiers.shift() {
+                            //     widget::focus_previous()
+                            // } else {
+                            //     widget::focus_next()
+                            // }
+                            println!("Up");
+                            if self.f_idx > 1 {
+                                self.f_idx -= 1;
+                            }
+                        },
+                        iced::keyboard::Event::KeyPressed {
+                            key_code: iced::keyboard::KeyCode::Down,
+                            modifiers,
+                        } => {
+                            // if modifiers.shift() {
+                            //     widget::focus_previous()
+                            // } else {
+                            //     widget::focus_next()
+                            // }
+                            println!("Down");
                             if self.f_idx + 1 < self.f_max {
                                 self.f_idx += 1;
                             }
@@ -142,37 +170,70 @@ impl Application for Events {
         let path = Container::new(Text::new(p).size(20)).padding(4);
 
         // 画像表示部
-        let image;
+        let image_r;
         if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
             let f = &self.files[self.f_idx];
             println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
             let data = readrar::read_data(&self.buf, f.offset, f.size);
             let handle = iced::widget::image::Handle::from_memory(data);
 
-            image = Container::new(
+            image_r = Container::new(
                 iced::widget::image::Viewer::new(handle)
             )
             .height(Length::Fill)
             .width(Length::Fill)
-            .align_x(alignment::Horizontal::Center)
+            .align_x(alignment::Horizontal::Left)
             .align_y(alignment::Vertical::Center);
         } else {
-            image = Container::new(
+            image_r = Container::new(
                 Image::new(self.path.clone())
                     .width(Length::Fill)
                     .height(Length::Fill),
             )
             .height(Length::Fill)
             .width(Length::Fill)
-            .align_x(alignment::Horizontal::Center)
+            .align_x(alignment::Horizontal::Left)
             .align_y(alignment::Vertical::Center);
         }
-        
+
+        let image_l;
+        if self.path.to_str().unwrap_or("").to_string().contains(".rar") &&
+           self.f_idx + 1 < self.f_max {
+            let f = &self.files[self.f_idx+1];
+            println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+            let data = readrar::read_data(&self.buf, f.offset, f.size);
+            let handle = iced::widget::image::Handle::from_memory(data);
+
+            image_l = Container::new(
+                iced::widget::image::Viewer::new(handle)
+            )
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Right)
+            .align_y(alignment::Vertical::Center);
+        } else {
+            image_l = Container::new(
+                Image::new(self.path.clone())
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Right)
+            .align_y(alignment::Vertical::Center);
+        }
+
+        let doubleview = Row::new()
+            .width(Length::Fill)
+            .align_items(Alignment::Start)
+            .push(image_l)
+            .push(image_r);
+
         let content = Column::new()
             .width(Length::Fill)
             .align_items(Alignment::Start)
             .push(path)
-            .push(image);
+            .push(doubleview);
 
         Container::new(content)
             .width(Length::Fill)
