@@ -11,6 +11,7 @@ use iced::widget::{
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
+use std::time::{Duration, Instant};
 
 mod readrar;
 
@@ -77,6 +78,7 @@ impl Application for Events {
                             self.buf = Vec::new();
                             let _ = file.read_to_end(&mut self.buf);
                             _ = readrar::read_rar(&self.buf, &mut self.files);
+                            self.files.sort_by(|a, b| a.filepath.to_lowercase().cmp(&b.filepath.to_lowercase()));
                             for f in &self.files {
                                 println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
                             }
@@ -171,56 +173,66 @@ impl Application for Events {
 
         // 画像表示部
         let image_r;
-        if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
-            let f = &self.files[self.f_idx];
-            println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-            let data = readrar::read_data(&self.buf, f.offset, f.size);
-            let handle = iced::widget::image::Handle::from_memory(data);
-
-            image_r = Container::new(
-                iced::widget::image::Viewer::new(handle)
-            )
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .align_x(alignment::Horizontal::Left)
-            .align_y(alignment::Vertical::Center);
-        } else {
-            image_r = Container::new(
-                Image::new(self.path.clone())
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            )
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .align_x(alignment::Horizontal::Left)
-            .align_y(alignment::Vertical::Center);
-        }
-
         let image_l;
-        if self.path.to_str().unwrap_or("").to_string().contains(".rar") &&
-           self.f_idx + 1 < self.f_max {
-            let f = &self.files[self.f_idx+1];
-            println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-            let data = readrar::read_data(&self.buf, f.offset, f.size);
-            let handle = iced::widget::image::Handle::from_memory(data);
+        if self.path.to_str().unwrap_or("").to_string().contains(".rar") && 
+           self.files.len() > 0 {
+            {
+                let f = &self.files[self.f_idx];
+                println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+            
+                let mut start = Instant::now();
+                let data = readrar::read_data(&self.buf, f.offset, f.size);
+                let mut end = start.elapsed();
+                println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 
-            image_l = Container::new(
-                iced::widget::image::Viewer::new(handle)
-            )
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .align_x(alignment::Horizontal::Right)
-            .align_y(alignment::Vertical::Center);
+                start = Instant::now();
+                let handle = iced::widget::image::Handle::from_memory(data);
+
+                image_r = Container::new(
+                    iced::widget::image::Viewer::new(handle)
+                )
+                .height(Length::Fill)
+                .width(Length::Fill)
+                .align_x(alignment::Horizontal::Left)
+                .align_y(alignment::Vertical::Center);
+                end = start.elapsed();
+                println!("draw left image takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
+            }
+
+            {
+                let f = &self.files[self.f_idx+1];
+                println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+
+                let mut start = Instant::now();
+                let data = readrar::read_data(&self.buf, f.offset, f.size);
+                let mut end = start.elapsed();
+                println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
+
+                start = Instant::now();
+                let handle = iced::widget::image::Handle::from_memory(data);
+
+                image_l = Container::new(
+                    iced::widget::image::Viewer::new(handle)
+                )
+                .height(Length::Fill)
+                .width(Length::Fill)
+                .align_x(alignment::Horizontal::Right)
+                .align_y(alignment::Vertical::Center);
+                end = start.elapsed();
+                println!("draw left image takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
+            }
         } else {
-            image_l = Container::new(
+            image_r = Container::new(
                 Image::new(self.path.clone())
                     .width(Length::Fill)
                     .height(Length::Fill),
             )
             .height(Length::Fill)
             .width(Length::Fill)
-            .align_x(alignment::Horizontal::Right)
+            .align_x(alignment::Horizontal::Left)
             .align_y(alignment::Vertical::Center);
+
+            image_l = Container::new(Text::new("empty").size(20)).padding(4);
         }
 
         let doubleview = Row::new()

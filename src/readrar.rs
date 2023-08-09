@@ -104,6 +104,16 @@ fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
                 pos = i;
                 result = true;
                 break;
+            } else if data[i+1] == 0x61 &&
+                        data[i+2] == 0x72 &&
+                        data[i+3] == 0x21 &&
+                        data[i+4] == 0x1A &&
+                        data[i+5] == 0x07 &&
+                        data[i+6] == 0x00 {
+                // RAR 4.x
+                pos = i;
+                result = true;
+                break;
             }
         }
     }
@@ -506,7 +516,12 @@ fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>)
         return std::usize::MAX;
     }
     offset += vintlen as usize;
-    println!("File Compression = {:#0X}", file_comp);
+    println!("File Compression = {:#0X}(ver:{:#0X}/solid:{:#0X}/method:{:#0X}/dicsize:{:#0X})",
+        file_comp,
+        file_comp & 0x003f,
+        (file_comp & 0x0040) >> 6,
+        (file_comp & 0x0380) >> 7,
+        (file_comp & 0x3c00) >> 10 );
 
     // Host OS (0:Windows/1:Unix)
     let file_hostos;
