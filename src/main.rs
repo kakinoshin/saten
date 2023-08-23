@@ -14,6 +14,11 @@ use std::io::Read;
 use std::time::{Duration, Instant};
 
 mod readrar;
+mod ArchiveReader;
+
+use crate::readrar::Rar5Reader;
+use crate::ArchiveReader::ArcReader;
+use crate::ArchiveReader::MemberFile;
 
 pub fn main() -> iced::Result {
     // フォントを指定しつつ実行する。
@@ -27,7 +32,7 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Default)]
 struct Events {
     path: PathBuf,
-    files : Vec<readrar::MemberFile>,
+    files : Vec<MemberFile>,
     f_idx : usize,
     f_max : usize,
     buf   : Vec<u8>,
@@ -77,7 +82,7 @@ impl Application for Events {
                             };
                             self.buf = Vec::new();
                             let _ = file.read_to_end(&mut self.buf);
-                            _ = readrar::read_rar(&self.buf, &mut self.files);
+                            _ = Rar5Reader::read_archive(&self.buf, &mut self.files);
                             self.files.sort_by(|a, b| a.filepath.to_lowercase().cmp(&b.filepath.to_lowercase()));
                             for f in &self.files {
                                 println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
@@ -181,7 +186,7 @@ impl Application for Events {
                 println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
             
                 let mut start = Instant::now();
-                let data = readrar::read_data(&self.buf, f.offset, f.size);
+                let data = Rar5Reader::read_data(&self.buf, f.offset, f.size);
                 let mut end = start.elapsed();
                 println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 
@@ -204,7 +209,7 @@ impl Application for Events {
                 println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
 
                 let mut start = Instant::now();
-                let data = readrar::read_data(&self.buf, f.offset, f.size);
+                let data = Rar5Reader::read_data(&self.buf, f.offset, f.size);
                 let mut end = start.elapsed();
                 println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 

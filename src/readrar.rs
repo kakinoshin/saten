@@ -1,13 +1,58 @@
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Debug, Clone)]
-pub struct MemberFile {
-    pub filepath: String,
-    pub filename: String,
-    pub offset: u64,
-    pub size: u64,
-    pub fsize: u64,
+use crate::ArchiveReader::ArcReader;
+use crate::ArchiveReader::MemberFile;
+
+pub struct Rar5Reader {
+    buf: Vec<u8>,
+    files: Vec<MemberFile>,
+}
+
+impl ArcReader for Rar5Reader {
+    fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut offset : usize = 0;
+    
+        let (pos, is_sign) = check_rarsign(&buf);
+        println!("signature pos : {:?}", pos);
+        
+        if is_sign {
+            offset += pos + 8;
+            let htype = check_headertype(&buf, offset);
+            println!("header type : {:?}", htype);
+    
+            if htype == 1 {
+                // read Main archive header
+                let hsize;
+                hsize = check_header_mainarchive(&buf, offset);
+                println!("header size : {:?}", hsize);
+                offset += hsize;
+                println!("offset : {:?}", offset);
+    
+                // read next block
+                loop {
+                    let btype = check_headertype(&buf, offset);
+                    println!("header type : {:?}", btype);
+                    if btype == 2 {
+                        println!("== File header ==");
+                        offset += check_header_file(&buf, offset, files);
+                    } else if btype == 3 {
+                        println!("== Service header ==");
+                        offset += check_header_service(&buf, offset);
+                    } else {
+                        println!("there is no file header");
+                        break;
+                    }
+                }
+            }
+        }
+    
+        Ok(())
+    }
+
+    fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
+        buf[offset as usize..offset as usize +size as usize].to_owned()
+    }
 }
 
 pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
@@ -15,47 +60,7 @@ pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Resu
     let mut buf = Vec::new();
     let _ = file.read_to_end(&mut buf)?;
 
-    read_rar(&buf, files)
-}
-
-pub fn read_rar(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut offset : usize = 0;
-
-    let (pos, is_sign) = check_rarsign(&buf);
-    println!("signature pos : {:?}", pos);
-    
-    if is_sign {
-        offset += pos + 8;
-        let htype = check_headertype(&buf, offset);
-        println!("header type : {:?}", htype);
-
-        if htype == 1 {
-            // read Main archive header
-            let hsize;
-            hsize = check_header_mainarchive(&buf, offset);
-            println!("header size : {:?}", hsize);
-            offset += hsize;
-            println!("offset : {:?}", offset);
-
-            // read next block
-            loop {
-                let btype = check_headertype(&buf, offset);
-                println!("header type : {:?}", btype);
-                if btype == 2 {
-                    println!("== File header ==");
-                    offset += check_header_file(&buf, offset, files);
-                } else if btype == 3 {
-                    println!("== Service header ==");
-                    offset += check_header_service(&buf, offset);
-                } else {
-                    println!("there is no file header");
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(())
+    Rar5Reader::read_archive(&buf, files)
 }
 
 // return (u64, u8)
@@ -857,6 +862,3 @@ pub fn read_data_from_file(filename : &str, offset : u64, size : u64) -> Vec<u8>
     buf[offset as usize..offset as usize +size as usize].to_owned()
 }
 
-pub fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
-    buf[offset as usize..offset as usize +size as usize].to_owned()
-}
