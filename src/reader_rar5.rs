@@ -1,8 +1,8 @@
-use std::fs::File;
-use std::io::Read;
+// use std::fs::File;
+// use std::io::Read;
 
-use crate::ArchiveReader::ArcReader;
-use crate::ArchiveReader::MemberFile;
+use crate::archive_reader::ArcReader;
+use crate::archive_reader::MemberFile;
 
 pub struct Rar5Reader {
     buf: Vec<u8>,
@@ -55,13 +55,13 @@ impl ArcReader for Rar5Reader {
     }
 }
 
-pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut file = File::open(filename)?;
-    let mut buf = Vec::new();
-    let _ = file.read_to_end(&mut buf)?;
+// pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+//     let mut file = File::open(filename)?;
+//     let mut buf = Vec::new();
+//     let _ = file.read_to_end(&mut buf)?;
 
-    Rar5Reader::read_archive(&buf, files)
-}
+//     Rar5Reader::read_archive(&buf, files)
+// }
 
 // return (u64, u8)
 //  data : u64 -> vint data
@@ -851,14 +851,14 @@ fn check_header_service(data : &Vec<u8>, pos : usize) -> usize {
     offset - pos
 }
 
-pub fn read_data_from_file(filename : &str, offset : u64, size : u64) -> Vec<u8> {
-    let mut file = match File::open(filename) {
-        Ok(f) => f,
-        Err(err) => panic!("file error: {}", err)
-    };
-    let mut buf = Vec::new();
-    let _ = file.read_to_end(&mut buf);
+// pub fn read_data_from_file(filename : &str, offset : u64, size : u64) -> Vec<u8> {
+//     let mut file = match File::open(filename) {
+//         Ok(f) => f,
+//         Err(err) => panic!("file error: {}", err)
+//     };
+//     let mut buf = Vec::new();
+//     let _ = file.read_to_end(&mut buf);
 
-    buf[offset as usize..offset as usize +size as usize].to_owned()
-}
+//     buf[offset as usize..offset as usize +size as usize].to_owned()
+// }
 
