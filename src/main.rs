@@ -15,10 +15,13 @@ use std::time::Instant;
 
 mod reader_rar5;
 mod archive_reader;
+mod file_checker;
 
 use crate::reader_rar5::Rar5Reader;
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
+use crate::file_checker::FileType;
+use crate::file_checker::CheckFileType;
 
 use regex::{Regex, Captures, Replacer};
 
@@ -89,16 +92,21 @@ impl Application for Events {
                     if let iced::window::Event::FileDropped(path) = we {
                         self.path = path;
 
-                        // read rar file
-                        if self.path.to_str().unwrap_or("").to_string().contains(".rar") {
-                            self.files = Vec::new();
-                            //readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
-                            let mut file = match File::open(self.path.to_str().unwrap()) {
-                                Ok(f) => f,
-                                Err(err) => panic!("file error: {}", err)
-                            };
-                            self.buf = Vec::new();
-                            let _ = file.read_to_end(&mut self.buf);
+                        // read file, prepare data in buffer
+                        self.files = Vec::new();
+                        //readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
+                        let mut file = match File::open(self.path.to_str().unwrap()) {
+                            Ok(f) => f,
+                            Err(err) => panic!("file error: {}", err)
+                        };
+                        self.buf = Vec::new();
+                        let _ = file.read_to_end(&mut self.buf);
+
+                        // check file format
+                        let ftype = CheckFileType(&self.buf);
+
+                        // read file
+                        if matches!(ftype, FileType::Rar5) {
                             _ = Rar5Reader::read_archive(&self.buf, &mut self.files);
                             sort_filename(&mut self.files);
                             self.f_idx = 0;
