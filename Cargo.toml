@@ -9,5 +9,6 @@ edition = "2021"
 iced = {version = "0.9", features = ["image"]}
 #iced_core = "0.9"
 iced_wgpu = "0.10"
+regex = "1.9.4"
 #iced_winit = "0.9"
 #iced_widget = "0.1"

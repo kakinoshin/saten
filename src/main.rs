@@ -20,6 +20,17 @@ use crate::reader_rar5::Rar5Reader;
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
 
+use regex::{Regex, Captures, Replacer};
+
+struct PaddProc;
+
+impl Replacer for PaddProc {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+        dst.push_str(&format!("{x:0>30}", x = &caps[0]));
+    }
+}
+
+
 pub fn main() -> iced::Result {
     // フォントを指定しつつ実行する。
     Events::run(Settings {
@@ -89,10 +100,7 @@ impl Application for Events {
                             self.buf = Vec::new();
                             let _ = file.read_to_end(&mut self.buf);
                             _ = Rar5Reader::read_archive(&self.buf, &mut self.files);
-                            self.files.sort_by(|a, b| a.filepath.to_lowercase().cmp(&b.filepath.to_lowercase()));
-                            for f in &self.files {
-                                println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-                            }
+                            sort_filename(&mut self.files);
                             self.f_idx = 0;
                             self.f_max = self.files.len();
                         } else {
@@ -187,7 +195,6 @@ impl Application for Events {
 
     // 表示されるGUIを生成する。
     fn view(&self) -> Element<Message> {
-        println!("view {}", matches!(self.page, Pages::Double));
         // ファイルパス表示部
         let mut p = self.path.to_str().unwrap_or("").to_string();
         if p.is_empty() {
@@ -271,8 +278,6 @@ fn view_single(ev: &Events) -> Element<Message> {
 }
 
 fn view_double(ev: &Events) -> Element<Message> {
-    println!("Drawing(DoubleView)");
-
     let image_r;
     let image_l;
     {
@@ -336,4 +341,17 @@ fn view_double(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+
+fn sort_filename(files : &mut Vec<MemberFile>) {
+    files.sort_by(|a, b| {
+        let re = Regex::new(r"(\d+)").unwrap();
+        let mod_a = re.replace_all(&a.filepath, PaddProc);
+        let mod_b = re.replace_all(&b.filepath, PaddProc);
+            mod_a.to_lowercase().cmp(&mod_b.to_lowercase())
+    });
+    for f in files {
+        println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+    }
 }
