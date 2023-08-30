@@ -5,19 +5,19 @@ pub enum FileType {
     Unsupported
 }
 
-pub fn CheckFileType(buf : &Vec<u8>) -> FileType {
-    if CheckRar5(buf) {
+pub fn check_file_type(buf : &Vec<u8>) -> FileType {
+    if check_rar5(buf) {
         FileType::Rar5
-    } else if CheckRar4(buf) {
+    } else if check_rar4(buf) {
         FileType::Rar4
-    } else if CheckZip(buf) {
+    } else if check_zip(buf) {
         FileType::Zip
     } else {
         FileType::Unsupported
     }
 }
 
-fn CheckRar5(data : &Vec<u8>) -> bool {
+fn check_rar5(data : &Vec<u8>) -> bool {
     // RAR 5.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x01 0x00
     let mut result : bool = false;
 
@@ -40,7 +40,7 @@ fn CheckRar5(data : &Vec<u8>) -> bool {
     result
 }
 
-fn CheckRar4(data : &Vec<u8>) -> bool {
+fn check_rar4(data : &Vec<u8>) -> bool {
     // RAR 4.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x00
     let mut result : bool = false;
 
@@ -62,7 +62,7 @@ fn CheckRar4(data : &Vec<u8>) -> bool {
 }
 
 // ZIP file header 0x504B0304
-fn CheckZip(data : &Vec<u8>) -> bool {
+fn check_zip(data : &Vec<u8>) -> bool {
     let mut result : bool = false;
 
     for (i, d) in data.iter().enumerate() {

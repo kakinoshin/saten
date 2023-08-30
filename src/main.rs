@@ -14,14 +14,16 @@ use std::io::Read;
 use std::time::Instant;
 
 mod reader_rar5;
+mod reader_rar4;
 mod archive_reader;
 mod file_checker;
 
 use crate::reader_rar5::Rar5Reader;
+use crate::reader_rar4::Rar4Reader;
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
 use crate::file_checker::FileType;
-use crate::file_checker::CheckFileType;
+use crate::file_checker::check_file_type;
 
 use regex::{Regex, Captures, Replacer};
 
@@ -103,15 +105,27 @@ impl Application for Events {
                         let _ = file.read_to_end(&mut self.buf);
 
                         // check file format
-                        let ftype = CheckFileType(&self.buf);
+                        let ftype = check_file_type(&self.buf);
 
                         // read file
                         if matches!(ftype, FileType::Rar5) {
+                            println!("DEBUG: File type is RAR5");
                             _ = Rar5Reader::read_archive(&self.buf, &mut self.files);
                             sort_filename(&mut self.files);
                             self.f_idx = 0;
                             self.f_max = self.files.len();
+                        } else if matches!(ftype, FileType::Rar4) {
+                            println!("DEBUG: File type is RAR4");
+                            _ = Rar4Reader::read_archive(&self.buf, &mut self.files);
+                            sort_filename(&mut self.files);
+                            self.f_idx = 0;
+                            self.f_max = self.files.len();
+                        } else if matches!(ftype, FileType::Zip) {
+                            println!("DEBUG: File type is ZIP");
+                            self.f_idx = 0;
+                            self.f_max = 0;
                         } else {
+                            println!("DEBUG: Unsupported file");
                             self.f_idx = 0;
                             self.f_max = 0;
                         }

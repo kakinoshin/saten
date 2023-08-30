@@ -4,49 +4,113 @@
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
 
-pub struct Rar5Reader {
+pub struct Rar4Reader {
     buf: Vec<u8>,
     files: Vec<MemberFile>,
 }
 
-impl ArcReader for Rar5Reader {
+impl ArcReader for Rar4Reader {
     fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
         let mut offset : usize = 0;
-    
+
         let (pos, is_sign) = check_rarsign(&buf);
         println!("signature pos : {:?}", pos);
-        
+
         if is_sign {
-            offset += pos + 8;
-            let htype = check_headertype(&buf, offset);
-            println!("header type : {:?}", htype);
-    
-            if htype == 1 {
-                // read Main archive header
-                let hsize;
-                hsize = check_header_mainarchive(&buf, offset);
-                println!("header size : {:?}", hsize);
-                offset += hsize;
-                println!("offset : {:?}", offset);
-    
-                // read next block
-                loop {
-                    let btype = check_headertype(&buf, offset);
-                    println!("header type : {:?}", btype);
-                    if btype == 2 {
-                        println!("== File header ==");
-                        offset += check_header_file(&buf, offset, files);
-                    } else if btype == 3 {
-                        println!("== Service header ==");
-                        offset += check_header_service(&buf, offset);
-                    } else {
-                        println!("there is no file header");
-                        break;
+            offset += pos + 7;  // skip signature
+
+            loop {
+                if buf.len() <= offset + 7 {    // size of heaeder
+                    break;
+                }
+
+                let htype: u8;
+                let hflags: u16;
+                let hsize: u16;
+                (htype, hflags, hsize) = check_headertype(&buf, offset);
+                println!("header type : {:#02x}", htype);
+                offset += 7;
+
+                if htype == 0x73 {  // MAIN_HEAD (0x73)
+                    println!("DEBUG: [MAIN_HEAD] - 0x73");
+                    println!("DEBUG: HighPosAv: {:#02x} {:#02x}", buf[offset], buf[offset+1]);
+                    println!("DEBUG: PosAv: {:#02x} {:#02x} {:#02x} {:#02x}", buf[offset+2], buf[offset+3], buf[offset+4], buf[offset+5]);
+                    offset += (hsize as usize) - 7;
+                } else if htype == 0x74 {  // FILE_HEAD (0x74)
+                    println!("DEBUG: [FILE_HEAD] - 0x74");
+                    let psize = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
+                    println!("DEBUG: packed size:   {}", psize);
+                    offset += 4;    // PackSize
+                    let upsize = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
+                    println!("DEBUG: unpacked size: {}", upsize);
+                    if psize != upsize {
+                        println!("DEBUG: Compressed (Unsupported)");
                     }
+                    offset += 4;    // UnpSize
+                    offset += 1;    // HostOS
+                    offset += 4;    // FileCRC
+                    offset += 4;    // FileTime (mtime)
+                    offset += 1;    // UnpVer
+                    offset += 1;    // Method
+                    let nsize = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
+                    println!("DEBUG: filename size: {}", nsize);
+                    offset += 2;    // NameSize
+                    let fattr = (buf[offset+1] as u32) << 24 | (buf[offset+1] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
+                    println!("DEBUG: file attr: {:#04x}", fattr);
+                    offset += 4;    // FileAttr
+                    if (hflags & 0x0100) != 0 { //LHD_LARGE
+                        println!("DEBUG: HighPackSize");
+                        offset += 4;    // HighPackSize
+                    }
+                    if (hflags & 0x0100) != 0 { //LHD_LARGE
+                        println!("DEBUG: HighUnpSize");
+                        offset += 4;    // HighUnpSize
+                    }
+                    let mut endpos = offset;
+                    for i in offset..(offset+nsize as usize) {
+                        if buf[i] == 0 {
+                            endpos = i;
+                            break;
+                        }
+                    }
+                    println!("DEBUG: file name end position: {}", endpos);
+                    let file_name = std::str::from_utf8(&buf[offset..endpos]).unwrap();
+                    println!("{}", file_name);
+                    offset += nsize as usize;   // FileName
+                    if (hflags & 0x0400) != 0 { //LHD_SALT
+                        println!("DEBUG: Salt");
+                        offset += 4;    // Salt
+                    }
+                    if (hflags & 0x1000) != 0 { //LHD_EXTTIME
+                        println!("DEBUG: ExtTime_Structure");
+                        offset += 4;    // ExtTime_Structure
+                    }
+                    offset += 9;    // adjust (??)
+                    let data_offset = offset as u64;
+                    offset += psize as usize;   // Packaed Data
+                    //println!("DEBUG: offset: {:#08x}", offset);
+                    // add file info
+                    if (fattr & 0x20) != 0 {
+                        files.push(MemberFile {
+                            filepath: file_name.to_string(),
+                            filename: file_name.to_string(),
+                            offset: data_offset,
+                            size: psize as u64,
+                            fsize: upsize as u64,
+                        });
+                    }
+                } else if htype == 0x7a {  // NEWSUB_HEAD (0x7a)
+                    println!("DEBUG: [NEWSUB_HEAD] - 0x7a");
+                    let newsub_size = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
+                    println!("DEBUG: Size: {}", newsub_size);
+                    offset += (hsize as usize) - 7; // skip header
+                    offset += newsub_size as usize; // skip newsub body
+                } else {
+                    offset += (hsize as usize) - 7;
                 }
             }
         }
-    
+
         Ok(())
     }
 
@@ -92,7 +156,6 @@ fn read_vint(data : &Vec<u8>, pos : usize) -> (u64, u8) {
 }
 
 fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
-    // RAR 5.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x01 0x00
     let mut pos : usize = 0;
     let mut result : bool = false;
 
@@ -104,8 +167,7 @@ fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
                data[i+3] == 0x21 &&
                data[i+4] == 0x1A &&
                data[i+5] == 0x07 &&
-               data[i+6] == 0x01 &&
-               data[i+7] == 0x00 {
+               data[i+6] == 0x00 {
                 pos = i;
                 result = true;
                 break;
@@ -116,39 +178,56 @@ fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
     (pos, result)
 }
 
-fn check_headertype(data : &Vec<u8>, pos : usize) -> u64 {
+// [Volume header] => total 7 bytes
+//  header_crc    2 bytes
+//  header_type   1 byte
+//  header_flags  2 bytes
+//  header_size   2 bytes
+fn check_headertype(data : &Vec<u8>, pos : usize) -> (u8, u16, u16) {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
 
-    let htype : u64;
-    let hsize : u64;
+    let htype : u8;
+    let hflags : u16;
+    let hsize : u16;
 
-    if data.len() >= offset + 6 {
+    if data.len() >= offset + 7 {
         // skip crc
-        offset += 4;
-
-        // header size
-        (hsize, vintlen) = read_vint(&data, offset);
-        if vintlen == std::u8::MAX {
-            return std::u64::MAX;
-        }
-        offset += vintlen as usize;
+        offset += 2;
 
         // header type
-        (htype, vintlen) = read_vint(&data, offset);
-        if vintlen == std::u8::MAX {
-            return std::u64::MAX;
-        }
-        offset += vintlen as usize;
+        htype = data[offset];
+        offset += 1;
+
+        // header flags
+        hflags = (data[offset] as u16) << 8 | (data[offset] as u16);
+        offset += 2;
+
+        // header size
+        hsize = (data[offset+1] as u16) << 8 | (data[offset] as u16);
+        offset += 2;
+
     } else {
         htype = 0;
+        hflags = 0;
         hsize = 0;
     }
 
-    htype
+    println!("DEBUG: Header (type:{:#02x}, flags:{:#02x}, size:{})", htype, hflags, hsize);
+
+    (htype, hflags, hsize)
 }
 
-fn check_header_mainarchive(data : &Vec<u8>, pos : usize) -> usize {
+// [Volume header]
+//  header_crc    2 bytes (contains this in header size)
+//  header_type   1 byte
+//  header_flags  2 bytes
+//  header_size   2 bytes (=> has to be 13(7+6) or 14(7+7))
+// [MAIN_HEAD]
+//  HighPosAv     2 bytes
+//  PosAV         4 bytes
+//  EncryptVer    1 byte (only present if MHD_ENCRYPTVER is set) 
+fn check_header_main_head(data : &Vec<u8>, pos : usize) -> usize {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
     let mut headerlen : usize = 0;
