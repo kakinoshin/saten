@@ -17,6 +17,7 @@ mod reader_rar5;
 mod reader_rar4;
 mod archive_reader;
 mod file_checker;
+mod sort_filename;
 
 use crate::reader_rar5::Rar5Reader;
 use crate::reader_rar4::Rar4Reader;
@@ -24,17 +25,7 @@ use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
 use crate::file_checker::FileType;
 use crate::file_checker::check_file_type;
-
-use regex::{Regex, Captures, Replacer};
-
-struct PaddProc;
-
-impl Replacer for PaddProc {
-    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
-        dst.push_str(&format!("{x:0>30}", x = &caps[0]));
-    }
-}
-
+use crate::sort_filename::sort_filename;
 
 pub fn main() -> iced::Result {
     // フォントを指定しつつ実行する。
@@ -363,17 +354,4 @@ fn view_double(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
-}
-
-
-fn sort_filename(files : &mut Vec<MemberFile>) {
-    files.sort_by(|a, b| {
-        let re = Regex::new(r"(\d+)").unwrap();
-        let mod_a = re.replace_all(&a.filepath, PaddProc);
-        let mod_b = re.replace_all(&b.filepath, PaddProc);
-            mod_a.to_lowercase().cmp(&mod_b.to_lowercase())
-    });
-    for f in files {
-        println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-    }
 }
