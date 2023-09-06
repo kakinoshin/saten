@@ -15,12 +15,14 @@ use std::time::Instant;
 
 mod reader_rar5;
 mod reader_rar4;
+mod reader_zip;
 mod archive_reader;
 mod file_checker;
 mod sort_filename;
 
 use crate::reader_rar5::Rar5Reader;
 use crate::reader_rar4::Rar4Reader;
+use crate::reader_zip::ZipReader;
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
 use crate::file_checker::FileType;
@@ -113,8 +115,10 @@ impl Application for Events {
                             self.f_max = self.files.len();
                         } else if matches!(ftype, FileType::Zip) {
                             println!("DEBUG: File type is ZIP");
+                            _ = ZipReader::read_archive(&self.buf, &mut self.files);
+                            sort_filename(&mut self.files);
                             self.f_idx = 0;
-                            self.f_max = 0;
+                            self.f_max = self.files.len();
                         } else {
                             println!("DEBUG: Unsupported file");
                             self.f_idx = 0;
@@ -216,7 +220,7 @@ impl Application for Events {
         let path = Container::new(Text::new(p).size(20)).padding(4);
 
         // 画像表示部
-        if self.path.to_str().unwrap_or("").to_string().contains(".rar") && 
+        if //self.path.to_str().unwrap_or("").to_string().contains(".rar") && 
            self.files.len() > 0 {
             if matches!(self.page, Pages::Single) {
 				view_single(&self)
