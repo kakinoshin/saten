@@ -19,20 +19,25 @@ mod reader_zip;
 mod archive_reader;
 mod file_checker;
 mod sort_filename;
+mod compress_deflate;
 
 use crate::reader_rar5::Rar5Reader;
 use crate::reader_rar4::Rar4Reader;
 use crate::reader_zip::ZipReader;
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
+use crate::archive_reader::CompressionType;
 use crate::file_checker::FileType;
 use crate::file_checker::check_file_type;
 use crate::sort_filename::sort_filename;
 
+use photon_rs::native::{open_image_from_bytes};
+
+
 pub fn main() -> iced::Result {
     // フォントを指定しつつ実行する。
     Events::run(Settings {
-        default_font: Some(include_bytes!("../fonts/NotoSansJP-Regular.ttf")),
+        //default_font: Some(include_bytes!("../fonts/NotoSansJP-Regular.ttf")),
         ..Settings::default()
     })
 }
@@ -45,12 +50,13 @@ enum Pages {
 // メインとなる構造体。アプリで保持する状態を変数にする。
 #[derive(Debug, Default)]
 struct Events {
-    path: PathBuf,
-    files : Vec<MemberFile>,
-    f_idx : usize,
-    f_max : usize,
-    buf   : Vec<u8>,
-    page  : Pages,
+    path   : PathBuf,
+    files  : Vec<MemberFile>,
+    f_idx  : usize,
+    f_max  : usize,
+    buf    : Vec<u8>,
+    page   : Pages,
+    rotate : bool,
 }
 
 // 何らかの変更があったときに飛ぶメッセージ。今回はイベント発生のみ。
@@ -195,6 +201,18 @@ impl Application for Events {
                         } => {
                             self.page = Pages::Double;
                         },
+                        iced::keyboard::Event::KeyPressed {
+                            key_code: iced::keyboard::KeyCode::R,
+                            modifiers: _
+                        } => {
+                            // if modifiers.shift() {
+                            //     widget::focus_previous()
+                            // } else {
+                            //     widget::focus_next()
+                            // }
+                            println!("R");
+                            self.rotate = !self.rotate;
+                        },
                         _ => {},
                     }
                 }
@@ -265,7 +283,11 @@ fn view_single(ev: &Events) -> Element<Message> {
         println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
 
         let mut start = Instant::now();
-        let data = Rar5Reader::read_data(&ev.buf, f.offset, f.size);
+        let data = match f.ctype {
+            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
+            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
+            _ => Vec::new(),
+        };
         let mut end = start.elapsed();
         println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 
@@ -302,7 +324,12 @@ fn view_double(ev: &Events) -> Element<Message> {
         println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
     
         let mut start = Instant::now();
-        let data = Rar5Reader::read_data(&ev.buf, f.offset, f.size);
+        let data = match f.ctype {
+            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
+            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
+            _ => Vec::new(),
+        };
+        //let data = ZipReader::read_data(&ev.buf, f.offset, f.size);
         let mut end = start.elapsed();
         println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 
@@ -325,7 +352,11 @@ fn view_double(ev: &Events) -> Element<Message> {
         println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
 
         let mut start = Instant::now();
-        let data = Rar5Reader::read_data(&ev.buf, f.offset, f.size);
+        let data = match f.ctype {
+            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
+            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
+            _ => Vec::new(),
+        };
         let mut end = start.elapsed();
         println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 

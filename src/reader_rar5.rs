@@ -3,6 +3,7 @@
 
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
+use crate::archive_reader::CompressionType;
 
 pub struct Rar5Reader {
     buf: Vec<u8>,
@@ -10,6 +11,13 @@ pub struct Rar5Reader {
 }
 
 impl ArcReader for Rar5Reader {
+    fn new() -> Self {
+        Self {
+            buf : Vec::new(),
+            files : Vec::new(),
+        }
+    }
+
     fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
         let mut offset : usize = 0;
     
@@ -561,6 +569,17 @@ fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>)
     }
     println!("debug: offset = {:?}", offset);
 
+    // compress type
+    let ctype = match (file_comp & 0x0380) >> 7 {
+        0 => CompressionType::Uncompress,
+        1 => CompressionType::Rar5,
+        2 => CompressionType::Rar5,
+        3 => CompressionType::Rar5,
+        4 => CompressionType::Rar5,
+        5 => CompressionType::Rar5,
+        _ => CompressionType::Unsupported,
+    };
+
     // add file info
     if is_data && !is_dir {
         files.push(MemberFile {
@@ -569,6 +588,7 @@ fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>)
             offset: data_offset,
             size: data_size,
             fsize: file_size,
+            ctype: ctype,
         });
     }
 

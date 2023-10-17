@@ -1,8 +1,10 @@
 // use std::fs::File;
-// use std::io::Read;
+use std::io::Read;
+use flate2::read::DeflateDecoder;
 
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
+use crate::archive_reader::CompressionType;
 
 pub struct ZipReader {
     buf: Vec<u8>,
@@ -10,6 +12,13 @@ pub struct ZipReader {
 }
 
 impl ArcReader for ZipReader {
+    fn new() -> Self {
+        Self {
+            buf : Vec::new(),
+            files : Vec::new(),
+        }
+    }
+
     fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
         let mut offset : usize = 0;
 
@@ -80,6 +89,13 @@ impl ArcReader for ZipReader {
                 let data_offset = offset;
                 offset += csize as usize;
 
+                // compress type
+                let ctype = match ver {
+                    10 => CompressionType::Uncompress,
+                    20 => CompressionType::Deflate,
+                    _ => CompressionType::Unsupported,
+                };
+
                 // add file info
                 if csize > 0 {
                     files.push(MemberFile {
@@ -88,6 +104,7 @@ impl ArcReader for ZipReader {
                         offset: data_offset as u64,
                         size: csize as u64,
                         fsize: ucsize as u64,
+                        ctype: ctype,
                     });
                 }
             }
@@ -98,8 +115,20 @@ impl ArcReader for ZipReader {
 
     fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
         buf[offset as usize..offset as usize +size as usize].to_owned()
+        //read_comressed_data(buf,offset,size)
     }
 }
+
+fn read_comressed_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
+    println!("compressed");
+    let src: &[u8] = &buf[offset as usize..offset as usize +size as usize].to_owned();
+    let mut deflater = DeflateDecoder::new(src);
+    let mut data = Vec::new();
+    deflater.read_to_end(&mut data);
+
+    data
+}
+
 
 // pub fn read_rar_from_file(filename : &str, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
 //     let mut file = File::open(filename)?;

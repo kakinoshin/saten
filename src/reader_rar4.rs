@@ -3,6 +3,7 @@
 
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
+use crate::archive_reader::CompressionType;
 
 pub struct Rar4Reader {
     buf: Vec<u8>,
@@ -10,6 +11,13 @@ pub struct Rar4Reader {
 }
 
 impl ArcReader for Rar4Reader {
+    fn new() -> Self {
+        Self {
+            buf : Vec::new(),
+            files : Vec::new(),
+        }
+    }
+
     fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
         let mut offset : usize = 0;
 
@@ -50,7 +58,9 @@ impl ArcReader for Rar4Reader {
                     offset += 1;    // HostOS
                     offset += 4;    // FileCRC
                     offset += 4;    // FileTime (mtime)
-                    offset += 1;    // UnpVer
+                    // UnpVer
+                    let unpver = buf[offset] as u8;
+                    offset += 1;
                     offset += 1;    // Method
                     let nsize = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                     println!("DEBUG: filename size: {}", nsize);
@@ -89,6 +99,18 @@ impl ArcReader for Rar4Reader {
                     let data_offset = offset as u64;
                     offset += psize as usize;   // Packaed Data
                     //println!("DEBUG: offset: {:#08x}", offset);
+
+                    // compress type
+                    let ctype = match unpver {
+                        0 => CompressionType::Uncompress,
+                        15 => CompressionType::Rar4,
+                        20 => CompressionType::Rar4,
+                        26 => CompressionType::Rar4,
+                        29 => CompressionType::Rar4,
+                        36 => CompressionType::Rar4,
+                        _ => CompressionType::Unsupported,
+                    };
+
                     // add file info
                     if (fattr & 0x20) != 0 {
                         files.push(MemberFile {
@@ -97,6 +119,7 @@ impl ArcReader for Rar4Reader {
                             offset: data_offset,
                             size: psize as u64,
                             fsize: upsize as u64,
+                            ctype: ctype,
                         });
                     }
                 } else if htype == 0x7a {  // NEWSUB_HEAD (0x7a)
