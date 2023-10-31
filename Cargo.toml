@@ -14,4 +14,6 @@ regex = "1.9.4"
 #iced_winit = "0.9"
 #iced_widget = "0.1"
 flate2 = "1.0"
-photon-rs = "0.3.1"
+#photon-rs = {version = "0.3.1"}     # 0.3.2 does not work because of conflict with iced
+image = "0.24.7"
+encoding_rs = "0.8.33"

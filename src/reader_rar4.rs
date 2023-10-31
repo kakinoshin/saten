@@ -1,5 +1,6 @@
 // use std::fs::File;
 // use std::io::Read;
+use encoding_rs;
 
 use crate::archive_reader::ArcReader;
 use crate::archive_reader::MemberFile;
@@ -84,7 +85,20 @@ impl ArcReader for Rar4Reader {
                         }
                     }
                     println!("DEBUG: file name end position: {}", endpos);
-                    let file_name = std::str::from_utf8(&buf[offset..endpos]).unwrap();
+                    //let file_name = std::str::from_utf8(&buf[offset..endpos]).unwrap();
+                    let file_name = match std::str::from_utf8(&buf[offset..endpos]) {
+                        Ok(fname) => fname,
+                        Err(e) => {
+                            println!("invalid file name error: {}", e.to_string());
+                            let (res, _, _) = encoding_rs::UTF_8.decode(&buf[offset..endpos]);
+                            //let (res, _, _) = encoding_rs::SHIFT_JIS.decode(&buf[offset..endpos]);
+                            let text = res.into_owned();
+                            println!("sjis: {}", text);
+                            //let pt = &text;
+                            //pt
+                            "invalid_filename"
+                        },
+                    };
                     println!("{}", file_name);
                     offset += nsize as usize;   // FileName
                     if (hflags & 0x0400) != 0 { //LHD_SALT

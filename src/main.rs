@@ -8,6 +8,7 @@ use iced::{
 use iced::widget::{
     Container, Text, Column, Row, Image, 
 };
+
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
@@ -31,7 +32,10 @@ use crate::file_checker::FileType;
 use crate::file_checker::check_file_type;
 use crate::sort_filename::sort_filename;
 
-use photon_rs::native::{open_image_from_bytes};
+//use photon_rs::native::{open_image_from_bytes};
+//use photon_rs::transform::rotate;
+
+use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage, DynamicImage};
 
 
 pub fn main() -> iced::Result {
@@ -276,23 +280,61 @@ impl Application for Events {
 
 }
 
-fn view_single(ev: &Events) -> Element<Message> {
-    let image_s;
-    {
-        let f = &ev.files[ev.f_idx];
+fn get_image_handle(ev: &Events, f_idx : usize) -> iced::widget::image::Handle {
+    let handle : iced::widget::image::Handle;
+    if ev.files.len() > f_idx {
+        let f = &ev.files[f_idx];
         println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
 
-        let mut start = Instant::now();
         let data = match f.ctype {
             CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
             CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
             _ => Vec::new(),
         };
-        let mut end = start.elapsed();
-        println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
 
-        start = Instant::now();
-        let handle = iced::widget::image::Handle::from_memory(data);
+        if ev.rotate {
+            let pimg = image::load_from_memory(&data[..]).unwrap();
+            let pimg = pimg.rotate180();
+            let bytes = pimg.clone().into_rgba8().into_raw();
+            handle = iced::widget::image::Handle::from_pixels(
+                pimg.width() as u32,
+                pimg.height() as u32,
+            bytes,
+            );
+        } else {
+            handle = iced::widget::image::Handle::from_memory(data);
+        }
+    } else {
+        let pimg = ImageBuffer::from_pixel(16, 16, image::Rgba([255, 0, 0, 255]));
+        handle = iced::widget::image::Handle::from_pixels(
+            pimg.width() as u32,
+            pimg.height() as u32,
+            pimg.into_vec(),
+        );
+
+        // let width = 400;
+        // let height = 300;
+        // let mut imgbuf = ImageBuffer::new(width, height);
+
+        // // Fill the ImageBuffer with some data (for example, a solid color)
+        // for pixel in imgbuf.pixels_mut() {
+        //     *pixel = image::Rgba([0, 255, 0, 255]); // Green
+        // }
+
+        // // Convert the ImageBuffer to bytes
+        // let bytes: Vec<u8> = imgbuf.into_raw();
+
+        // // Create an Iced Image handle
+        // handle = iced::widget::image::Handle::from_pixels(width as u32, height as u32, bytes);
+    }
+
+    handle
+}
+
+fn view_single(ev: &Events) -> Element<Message> {
+    let image_s;
+    {
+        let handle = get_image_handle(ev, ev.f_idx);
 
         image_s = Container::new(
             iced::widget::image::Viewer::new(handle)
@@ -301,8 +343,6 @@ fn view_single(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .align_x(alignment::Horizontal::Center)
         .align_y(alignment::Vertical::Center);
-        end = start.elapsed();
-        println!("draw left image takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
     }
 
     let content = Column::new()
@@ -319,23 +359,11 @@ fn view_single(ev: &Events) -> Element<Message> {
 fn view_double(ev: &Events) -> Element<Message> {
     let image_r;
     let image_l;
+
+    let handle_1 = get_image_handle(ev, ev.f_idx);
+    let handle_2 = get_image_handle(ev, ev.f_idx + 1);
     {
-        let f = &ev.files[ev.f_idx];
-        println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-    
-        let mut start = Instant::now();
-        let data = match f.ctype {
-            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
-            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
-            _ => Vec::new(),
-        };
-        //let data = ZipReader::read_data(&ev.buf, f.offset, f.size);
-        let mut end = start.elapsed();
-        println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
-
-        start = Instant::now();
-        let handle = iced::widget::image::Handle::from_memory(data);
-
+        let handle = if !ev.rotate {handle_1.clone()} else {handle_2.clone()};
         image_r = Container::new(
             iced::widget::image::Viewer::new(handle)
         )
@@ -343,26 +371,10 @@ fn view_double(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .align_x(alignment::Horizontal::Left)
         .align_y(alignment::Vertical::Center);
-        end = start.elapsed();
-        println!("draw left image takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
     }
 
     {
-        let f = &ev.files[ev.f_idx+1];
-        println!("Drawing(R) : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-
-        let mut start = Instant::now();
-        let data = match f.ctype {
-            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
-            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
-            _ => Vec::new(),
-        };
-        let mut end = start.elapsed();
-        println!("read file takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
-
-        start = Instant::now();
-        let handle = iced::widget::image::Handle::from_memory(data);
-
+        let handle = if !ev.rotate {handle_2.clone()} else {handle_1.clone()};
         image_l = Container::new(
             iced::widget::image::Viewer::new(handle)
         )
@@ -370,8 +382,6 @@ fn view_double(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .align_x(alignment::Horizontal::Right)
         .align_y(alignment::Vertical::Center);
-        end = start.elapsed();
-        println!("draw left image takes {}.{:03}sec ", end.as_secs(), end.subsec_nanos() / 1_000_000);
     }
 
     let doubleview = Row::new()
