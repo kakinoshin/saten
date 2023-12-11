@@ -289,6 +289,7 @@ fn get_image_handle(ev: &Events, f_idx : usize) -> iced::widget::image::Handle {
         let data = match f.ctype {
             CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
             CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
+            CompressionType::Deflate64 => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
             _ => Vec::new(),
         };
 

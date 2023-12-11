@@ -4,6 +4,7 @@ pub enum CompressionType {
     Uncompress,
     Unsupported,
     Deflate,
+    Deflate64,
     Rar5,
     Rar4,
 }

@@ -90,9 +90,10 @@ impl ArcReader for ZipReader {
                 offset += csize as usize;
 
                 // compress type
-                let ctype = match ver {
-                    10 => CompressionType::Uncompress,
-                    20 => CompressionType::Deflate,
+                let ctype = match comp {
+                    0 => CompressionType::Uncompress,
+                    8 => CompressionType::Deflate,
+                    9 => CompressionType::Deflate64,
                     _ => CompressionType::Unsupported,
                 };
 
