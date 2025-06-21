@@ -1,4 +1,5 @@
 use regex::{Regex, Captures, Replacer};
+use log::{info, debug};
 
 use crate::archive_reader::MemberFile;
 
@@ -10,14 +11,25 @@ impl Replacer for PaddProc {
     }
 }
 
-pub fn sort_filename(files : &mut Vec<MemberFile>) {
+pub fn sort_filename(files: &mut Vec<MemberFile>) {
+    // 数字パディング用の正規表現を作成
+    let re = match Regex::new(r"(\d+)") {
+        Ok(regex) => regex,
+        Err(e) => {
+            eprintln!("正規表現の作成に失敗: {}", e);
+            return; // ソートせずに終了
+        }
+    };
+
     files.sort_by(|a, b| {
-        let re = Regex::new(r"(\d+)").unwrap();
         let mod_a = re.replace_all(&a.filepath, PaddProc);
         let mod_b = re.replace_all(&b.filepath, PaddProc);
-            mod_a.to_lowercase().cmp(&mod_b.to_lowercase())
+        mod_a.to_lowercase().cmp(&mod_b.to_lowercase())
     });
+    
+    log::info!("ファイルをソートしました: {}件", files.len());
     for f in files {
-        println!("{}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
+        log::debug!("ファイル: {} (offset: {}, size: {}, fsize: {})", 
+               f.filepath, f.offset, f.size, f.fsize);
     }
 }

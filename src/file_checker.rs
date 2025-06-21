@@ -1,3 +1,11 @@
+use crate::archive_reader::{ArchiveError, ArchiveResult};
+
+// ファイル形式のシグネチャ定数
+const RAR5_SIGNATURE: &[u8] = &[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00];
+const RAR4_SIGNATURE: &[u8] = &[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00];
+const ZIP_SIGNATURE: &[u8] = &[0x50, 0x4B, 0x03, 0x04];
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum FileType {
     Zip,
     Rar5,
@@ -5,76 +13,31 @@ pub enum FileType {
     Unsupported
 }
 
-pub fn check_file_type(buf : &Vec<u8>) -> FileType {
-    if check_rar5(buf) {
-        FileType::Rar5
-    } else if check_rar4(buf) {
-        FileType::Rar4
-    } else if check_zip(buf) {
-        FileType::Zip
+pub fn check_file_type(buf: &[u8]) -> ArchiveResult<FileType> {
+    if buf.is_empty() {
+        return Err(ArchiveError::CorruptedArchive {
+            message: "空のファイルです".to_string(),
+        });
+    }
+
+    if check_signature(buf, RAR5_SIGNATURE) {
+        Ok(FileType::Rar5)
+    } else if check_signature(buf, RAR4_SIGNATURE) {
+        Ok(FileType::Rar4)
+    } else if check_signature(buf, ZIP_SIGNATURE) {
+        Ok(FileType::Zip)
     } else {
-        FileType::Unsupported
+        Ok(FileType::Unsupported)
     }
 }
 
-fn check_rar5(data : &Vec<u8>) -> bool {
-    // RAR 5.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x01 0x00
-    let mut result : bool = false;
-
-    for (i, d) in data.iter().enumerate() {
-        if *d == 0x52 as u8 {
-            // println!("{:#04X}", data[i+1]);
-            if data[i+1] == 0x61 &&
-               data[i+2] == 0x72 &&
-               data[i+3] == 0x21 &&
-               data[i+4] == 0x1A &&
-               data[i+5] == 0x07 &&
-               data[i+6] == 0x01 &&
-               data[i+7] == 0x00 {
-                result = true;
-                break;
-            }
-        }
+/// 指定されたシグネチャがバッファ内に存在するかチェック
+fn check_signature(data: &[u8], signature: &[u8]) -> bool {
+    if data.len() < signature.len() {
+        return false;
     }
 
-    result
-}
-
-fn check_rar4(data : &Vec<u8>) -> bool {
-    // RAR 4.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x00
-    let mut result : bool = false;
-
-    for (i, d) in data.iter().enumerate() {
-        if *d == 0x52 as u8 {
-            if data[i+1] == 0x61 &&
-               data[i+2] == 0x72 &&
-               data[i+3] == 0x21 &&
-               data[i+4] == 0x1A &&
-               data[i+5] == 0x07 &&
-               data[i+6] == 0x00 {
-                result = true;
-                break;
-            }
-        }
-    }
-
-    result
-}
-
-// ZIP file header 0x504B0304
-fn check_zip(data : &Vec<u8>) -> bool {
-    let mut result : bool = false;
-
-    for (i, d) in data.iter().enumerate() {
-        if *d == 0x50 as u8 {
-            if data[i+1] == 0x4B &&
-               data[i+2] == 0x03 &&
-               data[i+3] == 0x04 {
-                result = true;
-                break;
-            }
-        }
-    }
-
-    result
+    // ファイルの先頭からシグネチャを探す
+    data.windows(signature.len())
+        .any(|window| window == signature)
 }

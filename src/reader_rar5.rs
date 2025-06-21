@@ -1,9 +1,9 @@
 // use std::fs::File;
 // use std::io::Read;
 
-use crate::archive_reader::ArcReader;
-use crate::archive_reader::MemberFile;
-use crate::archive_reader::CompressionType;
+use crate::archive_reader::{ArcReader, ArchiveError, ArchiveResult};
+use crate::archive_reader::{MemberFile, CompressionType};
+use log::{info, warn, error, debug};
 
 pub struct Rar5Reader {
     buf: Vec<u8>,
@@ -18,37 +18,37 @@ impl ArcReader for Rar5Reader {
         }
     }
 
-    fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+    fn read_archive(buf: &[u8], files: &mut Vec<MemberFile>) -> ArchiveResult<()> {
         let mut offset : usize = 0;
     
-        let (pos, is_sign) = check_rarsign(&buf);
-        println!("signature pos : {:?}", pos);
+        let (pos, is_sign) = check_rarsign(buf);
+        log::debug!("RAR5 signature pos : {:?}", pos);
         
         if is_sign {
             offset += pos + 8;
-            let htype = check_headertype(&buf, offset);
-            println!("header type : {:?}", htype);
+            let htype = check_headertype(buf, offset);
+            log::debug!("RAR5 header type : {:?}", htype);
     
             if htype == 1 {
                 // read Main archive header
                 let hsize;
-                hsize = check_header_mainarchive(&buf, offset);
-                println!("header size : {:?}", hsize);
+                hsize = check_header_mainarchive(buf, offset);
+                log::debug!("RAR5 header size : {:?}", hsize);
                 offset += hsize;
-                println!("offset : {:?}", offset);
+                log::debug!("RAR5 offset : {:?}", offset);
     
                 // read next block
                 loop {
-                    let btype = check_headertype(&buf, offset);
-                    println!("header type : {:?}", btype);
+                    let btype = check_headertype(buf, offset);
+                    log::debug!("RAR5 header type : {:?}", btype);
                     if btype == 2 {
-                        println!("== File header ==");
-                        offset += check_header_file(&buf, offset, files);
+                        log::debug!("== RAR5 File header ==");
+                        offset += check_header_file(buf, offset, files);
                     } else if btype == 3 {
-                        println!("== Service header ==");
-                        offset += check_header_service(&buf, offset);
+                        log::debug!("== RAR5 Service header ==");
+                        offset += check_header_service(buf, offset);
                     } else {
-                        println!("there is no file header");
+                        log::debug!("RAR5: no more file headers");
                         break;
                     }
                 }
@@ -58,8 +58,19 @@ impl ArcReader for Rar5Reader {
         Ok(())
     }
 
-    fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
-        buf[offset as usize..offset as usize +size as usize].to_owned()
+    fn read_data(buf: &[u8], offset: u64, size: u64) -> ArchiveResult<Vec<u8>> {
+        let start = offset as usize;
+        let end = start + size as usize;
+        
+        if end > buf.len() {
+            return Err(ArchiveError::OutOfBounds {
+                offset,
+                size,
+                buffer_len: buf.len(),
+            });
+        }
+        
+        Ok(buf[start..end].to_owned())
     }
 }
 
@@ -99,7 +110,7 @@ fn read_vint(data : &Vec<u8>, pos : usize) -> (u64, u8) {
     (val, offset + 1)
 }
 
-fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
+fn check_rarsign(data: &[u8]) -> (usize, bool) {
     // RAR 5.0: 0x52 0x61 0x72 0x21 0x1A 0x07 0x01 0x00
     let mut pos : usize = 0;
     let mut result : bool = false;
@@ -124,7 +135,7 @@ fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
     (pos, result)
 }
 
-fn check_headertype(data : &Vec<u8>, pos : usize) -> u64 {
+fn check_headertype(data: &[u8], pos: usize) -> u64 {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
 
@@ -156,7 +167,7 @@ fn check_headertype(data : &Vec<u8>, pos : usize) -> u64 {
     htype
 }
 
-fn check_header_mainarchive(data : &Vec<u8>, pos : usize) -> usize {
+fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
     let mut headerlen : usize = 0;
@@ -305,7 +316,7 @@ fn check_header_mainarchive(data : &Vec<u8>, pos : usize) -> usize {
     headerlen
 }
 
-fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>) -> usize {
+fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> usize {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
     let mut headerlen : usize = 0;
@@ -597,7 +608,7 @@ fn check_header_file(data : &Vec<u8>, pos : usize, files : &mut Vec<MemberFile>)
     offset - pos
 }
 
-fn check_header_service(data : &Vec<u8>, pos : usize) -> usize {
+fn check_header_service(data: &[u8], pos: usize) -> usize {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
     let mut headerlen : usize = 0;

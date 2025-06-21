@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
 use std::time::Instant;
+use log::{info, warn, error, debug};
 
 mod reader_rar5;
 mod reader_rar4;
@@ -25,15 +26,10 @@ mod compress_deflate;
 use crate::reader_rar5::Rar5Reader;
 use crate::reader_rar4::Rar4Reader;
 use crate::reader_zip::ZipReader;
-use crate::archive_reader::ArcReader;
-use crate::archive_reader::MemberFile;
-use crate::archive_reader::CompressionType;
-use crate::file_checker::FileType;
-use crate::file_checker::check_file_type;
+use crate::archive_reader::{ArcReader, ArchiveError, ArchiveResult};
+use crate::archive_reader::{MemberFile, CompressionType};
+use crate::file_checker::{FileType, check_file_type};
 use crate::sort_filename::sort_filename;
-
-//use photon_rs::native::{open_image_from_bytes};
-//use photon_rs::transform::rotate;
 
 use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage, DynamicImage};
 
@@ -99,40 +95,30 @@ impl Application for Events {
 
                         // read file, prepare data in buffer
                         self.files = Vec::new();
-                        //readrar::read_rar(self.path.to_str().unwrap(), &mut self.files);
-                        let mut file = match File::open(self.path.to_str().unwrap()) {
-                            Ok(f) => f,
-                            Err(err) => panic!("file error: {}", err)
-                        };
-                        self.buf = Vec::new();
-                        let _ = file.read_to_end(&mut self.buf);
+                        
+                        // ファイル読み込み処理
+                        match load_archive_file(&self.path, &mut self.buf) {
+                            Ok(_) => log::info!("アーカイブファイルの読み込みが完了しました"),
+                            Err(e) => {
+                                log::error!("アーカイブファイルの読み込みに失敗: {}", e);
+                                // エラー状態をリセット
+                                self.files.clear();
+                                self.buf.clear();
+                                self.f_idx = 0;
+                                self.f_max = 0;
+                            }
+                        }
 
-                        // check file format
-                        let ftype = check_file_type(&self.buf);
-
-                        // read file
-                        if matches!(ftype, FileType::Rar5) {
-                            println!("DEBUG: File type is RAR5");
-                            _ = Rar5Reader::read_archive(&self.buf, &mut self.files);
-                            sort_filename(&mut self.files);
-                            self.f_idx = 0;
-                            self.f_max = self.files.len();
-                        } else if matches!(ftype, FileType::Rar4) {
-                            println!("DEBUG: File type is RAR4");
-                            _ = Rar4Reader::read_archive(&self.buf, &mut self.files);
-                            sort_filename(&mut self.files);
-                            self.f_idx = 0;
-                            self.f_max = self.files.len();
-                        } else if matches!(ftype, FileType::Zip) {
-                            println!("DEBUG: File type is ZIP");
-                            _ = ZipReader::read_archive(&self.buf, &mut self.files);
-                            sort_filename(&mut self.files);
-                            self.f_idx = 0;
-                            self.f_max = self.files.len();
-                        } else {
-                            println!("DEBUG: Unsupported file");
-                            self.f_idx = 0;
-                            self.f_max = 0;
+                        // ファイルが正常に読み込まれた場合のみ処理を続行
+                        if !self.buf.is_empty() {
+                            match process_archive(&self.buf, &mut self.files, &mut self.f_idx, &mut self.f_max) {
+                                Ok(_) => log::info!("アーカイブの処理が完了しました"),
+                                Err(e) => {
+                                    log::error!("アーカイブの処理に失敗: {}", e);
+                                    self.f_idx = 0;
+                                    self.f_max = 0;
+                                }
+                            }
                         }
                     }
                 } else if let iced::event::Event::Keyboard(we) = event {
@@ -144,11 +130,10 @@ impl Application for Events {
                             // if modifiers.shift() {
                             //     widget::focus_previous()
                             // } else {
-                            //     widget::focus_next()
-                            // }
-                            println!("Left");
+                            log::debug!("← キーが押されました");
                             if self.f_idx + 2 < self.f_max {
                                 self.f_idx += 2;
+                                log::debug!("ページを次に進めました: {}/{}", self.f_idx, self.f_max);
                             }
                         },
                         iced::keyboard::Event::KeyPressed {
@@ -158,11 +143,10 @@ impl Application for Events {
                             // if modifiers.shift() {
                             //     widget::focus_previous()
                             // } else {
-                            //     widget::focus_next()
-                            // }
-                            println!("Right");
+                            log::debug!("→ キーが押されました");
                             if self.f_idx > 2 {
                                 self.f_idx -= 2;
+                                log::debug!("ページを前に戻しました: {}/{}", self.f_idx, self.f_max);
                             }
                         },
                         iced::keyboard::Event::KeyPressed {
@@ -172,11 +156,10 @@ impl Application for Events {
                             // if modifiers.shift() {
                             //     widget::focus_previous()
                             // } else {
-                            //     widget::focus_next()
-                            // }
-                            println!("Up");
+                            log::debug!("↑ キーが押されました");
                             if self.f_idx > 1 {
                                 self.f_idx -= 1;
+                                log::debug!("ファイルインデックスを減らしました: {}/{}", self.f_idx, self.f_max);
                             }
                         },
                         iced::keyboard::Event::KeyPressed {
@@ -186,11 +169,10 @@ impl Application for Events {
                             // if modifiers.shift() {
                             //     widget::focus_previous()
                             // } else {
-                            //     widget::focus_next()
-                            // }
-                            println!("Down");
+                            log::debug!("↓ キーが押されました");
                             if self.f_idx + 1 < self.f_max {
                                 self.f_idx += 1;
+                                log::debug!("ファイルインデックスを増やしました: {}/{}", self.f_idx, self.f_max);
                             }
                         },
                         iced::keyboard::Event::KeyPressed {
@@ -198,12 +180,14 @@ impl Application for Events {
                             modifiers: _
                         } => {
                             self.page = Pages::Single;
+                            log::info!("シングルページモードに切り替えました");
                         },
                         iced::keyboard::Event::KeyPressed {
                             key_code: iced::keyboard::KeyCode::Key2,
                             modifiers: _
                         } => {
                             self.page = Pages::Double;
+                            log::info!("ダブルページモードに切り替えました");
                         },
                         iced::keyboard::Event::KeyPressed {
                             key_code: iced::keyboard::KeyCode::R,
@@ -212,10 +196,9 @@ impl Application for Events {
                             // if modifiers.shift() {
                             //     widget::focus_previous()
                             // } else {
-                            //     widget::focus_next()
-                            // }
-                            println!("R");
+                            log::debug!("R キーが押されました");
                             self.rotate = !self.rotate;
+                            log::info!("回転モード: {}", if self.rotate { "ON" } else { "OFF" });
                         },
                         _ => {},
                     }
@@ -280,56 +263,30 @@ impl Application for Events {
 
 }
 
-fn get_image_handle(ev: &Events, f_idx : usize) -> iced::widget::image::Handle {
-    let handle : iced::widget::image::Handle;
-    if ev.files.len() > f_idx {
-        let f = &ev.files[f_idx];
-        println!("Drawing : {}/{}/{}/{}", f.filepath, f.offset, f.size, f.fsize);
-
-        let data = match f.ctype {
-            CompressionType::Uncompress => Rar5Reader::read_data(&ev.buf, f.offset, f.size),
-            CompressionType::Deflate => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
-            CompressionType::Deflate64 => compress_deflate::uncomp_deflate(&ev.buf, f.offset, f.size),
-            _ => Vec::new(),
-        };
-
-        if ev.rotate {
-            let pimg = image::load_from_memory(&data[..]).unwrap();
-            let pimg = pimg.rotate180();
-            let bytes = pimg.clone().into_rgba8().into_raw();
-            handle = iced::widget::image::Handle::from_pixels(
-                pimg.width() as u32,
-                pimg.height() as u32,
-            bytes,
-            );
-        } else {
-            handle = iced::widget::image::Handle::from_memory(data);
-        }
-    } else {
-        let pimg = ImageBuffer::from_pixel(16, 16, image::Rgba([255, 0, 0, 255]));
-        handle = iced::widget::image::Handle::from_pixels(
-            pimg.width() as u32,
-            pimg.height() as u32,
-            pimg.into_vec(),
-        );
-
-        // let width = 400;
-        // let height = 300;
-        // let mut imgbuf = ImageBuffer::new(width, height);
-
-        // // Fill the ImageBuffer with some data (for example, a solid color)
-        // for pixel in imgbuf.pixels_mut() {
-        //     *pixel = image::Rgba([0, 255, 0, 255]); // Green
-        // }
-
-        // // Convert the ImageBuffer to bytes
-        // let bytes: Vec<u8> = imgbuf.into_raw();
-
-        // // Create an Iced Image handle
-        // handle = iced::widget::image::Handle::from_pixels(width as u32, height as u32, bytes);
+fn get_image_handle(ev: &Events, f_idx: usize) -> iced::widget::image::Handle {
+    if ev.files.len() <= f_idx {
+        log::warn!("無効なファイルインデックス: {} >= {}", f_idx, ev.files.len());
+        return create_error_image();
     }
 
-    handle
+    let f = &ev.files[f_idx];
+    log::debug!("描画中: {} (offset: {}, size: {}, fsize: {})", f.filepath, f.offset, f.size, f.fsize);
+
+    let data = match decompress_file_data(ev, f) {
+        Ok(data) => data,
+        Err(e) => {
+            log::error!("ファイルの解凍に失敗: {}", e);
+            return create_error_image();
+        }
+    };
+
+    match create_image_handle(&data, ev.rotate) {
+        Ok(handle) => handle,
+        Err(e) => {
+            log::error!("画像の作成に失敗: {}", e);
+            create_error_image()
+        }
+    }
 }
 
 fn view_single(ev: &Events) -> Element<Message> {
@@ -355,6 +312,105 @@ fn view_single(ev: &Events) -> Element<Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+// === エラーハンドリング用ヘルパー関数 ===
+
+/// アーカイブファイルを読み込む
+fn load_archive_file(path: &PathBuf, buf: &mut Vec<u8>) -> ArchiveResult<()> {
+    use crate::archive_reader::{ArchiveResult, ArchiveError};
+    
+    let file_path = path.to_str()
+        .ok_or_else(|| ArchiveError::CorruptedArchive {
+            message: "無効なファイルパスです".to_string(),
+        })?;
+
+    let mut file = File::open(file_path)?;
+    buf.clear();
+    file.read_to_end(buf)?;
+    
+    log::info!("ファイルを読み込みました: {} ({} bytes)", file_path, buf.len());
+    Ok(())
+}
+
+/// アーカイブを処理してファイルリストを作成
+fn process_archive(buf: &[u8], files: &mut Vec<MemberFile>, f_idx: &mut usize, f_max: &mut usize) -> ArchiveResult<()> {
+    use crate::archive_reader::{ArchiveResult, ArchiveError};
+    
+    let ftype = check_file_type(buf)?;
+    
+    match ftype {
+        FileType::Rar5 => {
+            log::info!("ファイル形式: RAR5");
+            Rar5Reader::read_archive(buf, files)?
+        },
+        FileType::Rar4 => {
+            log::info!("ファイル形式: RAR4");
+            Rar4Reader::read_archive(buf, files)?
+        },
+        FileType::Zip => {
+            log::info!("ファイル形式: ZIP");
+            ZipReader::read_archive(buf, files)?
+        },
+        FileType::Unsupported => {
+            return Err(ArchiveError::UnsupportedFormat);
+        }
+    }
+    
+    sort_filename(files);
+    *f_idx = 0;
+    *f_max = files.len();
+    
+    log::info!("アーカイブの処理が完了: {} 個のファイルを検出", files.len());
+    Ok(())
+}
+
+/// ファイルデータを解凍
+ fn decompress_file_data(ev: &Events, file: &MemberFile) -> ArchiveResult<Vec<u8>> {
+    match file.ctype {
+        CompressionType::Uncompress => {
+            Rar5Reader::read_data(&ev.buf, file.offset, file.size)
+        },
+        CompressionType::Deflate | CompressionType::Deflate64 => {
+            compress_deflate::uncomp_deflate(&ev.buf, file.offset, file.size)
+        },
+        CompressionType::Rar5 | CompressionType::Rar4 => {
+            Err(ArchiveError::DecompressionError(
+                "RAR圧縮はまだサポートされていません".to_string()
+            ))
+        },
+        CompressionType::Unsupported => {
+            Err(ArchiveError::DecompressionError(
+                "サポートされていない圧縮形式です".to_string()
+            ))
+        }
+    }
+}
+
+/// 画像ハンドルを作成
+fn create_image_handle(data: &[u8], rotate: bool) -> ArchiveResult<iced::widget::image::Handle> {
+    if rotate {
+        let pimg = image::load_from_memory(data)?;
+        let rotated = pimg.rotate180();
+        let bytes = rotated.clone().into_rgba8().into_raw();
+        Ok(iced::widget::image::Handle::from_pixels(
+            rotated.width(),
+            rotated.height(),
+            bytes,
+        ))
+    } else {
+        Ok(iced::widget::image::Handle::from_memory(data.to_vec()))
+    }
+}
+
+/// エラー用の赤い画像を作成
+fn create_error_image() -> iced::widget::image::Handle {
+    let pimg = ImageBuffer::from_pixel(64, 64, image::Rgba([255, 0, 0, 255]));
+    iced::widget::image::Handle::from_pixels(
+        pimg.width(),
+        pimg.height(),
+        pimg.into_vec(),
+    )
 }
 
 fn view_double(ev: &Events) -> Element<Message> {

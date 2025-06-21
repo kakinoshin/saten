@@ -1,10 +1,9 @@
-// use std::fs::File;
 use std::io::Read;
 use flate2::read::DeflateDecoder;
 
-use crate::archive_reader::ArcReader;
-use crate::archive_reader::MemberFile;
-use crate::archive_reader::CompressionType;
+use crate::archive_reader::{ArcReader, ArchiveError, ArchiveResult};
+use crate::archive_reader::{MemberFile, CompressionType};
+use log::{info, warn, error, debug};
 
 pub struct ZipReader {
     buf: Vec<u8>,
@@ -14,33 +13,34 @@ pub struct ZipReader {
 impl ArcReader for ZipReader {
     fn new() -> Self {
         Self {
-            buf : Vec::new(),
-            files : Vec::new(),
+            buf: Vec::new(),
+            files: Vec::new(),
         }
     }
 
-    fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+    fn read_archive(buf: &[u8], files: &mut Vec<MemberFile>) -> ArchiveResult<()> {
         let mut offset : usize = 0;
 
         // local file header signature     4 bytes  (0x04034b50)
-        let (pos, is_sign) = check_zipsign(&buf);
-        println!("signature pos : {:?}", pos);
+        let (pos, is_sign) = check_zipsign(&buf)?;
+        log::info!("ZIPシグネチャ位置: {}", pos);
 
         if is_sign {
+            offset = pos;
             loop {
-                if buf.len() <= offset + 30 {    // size of heaeder
+                if buf.len() <= offset + 30 {    // size of header
                     break;
                 }
-                println!("DEBUG: block start pos: {:?}", offset);
+                log::debug!("ZIPブロック開始位置: {}", offset);
 
                 // local file header signature     4 bytes  (0x04034b50)
                 if buf[offset] == 0x50 &&
                    buf[offset+1] == 0x4B && 
                    buf[offset+2] == 0x03 && 
                    buf[offset+3] == 0x04 {
-                    println!("signature pos : {:?}", offset);
+                    log::debug!("ZIPシグネチャ位置: {}", offset);
                 } else {
-                    println!("!!! no signature !!!");
+                    log::warn!("シグネチャが見つかりません");
                     break;
                 }
                 offset += 4;
@@ -65,11 +65,11 @@ impl ArcReader for ZipReader {
                 offset += 4;
                 // compressed size                 4 bytes
                 let csize = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
-                println!("DEBUG: compressed size: {:?}", csize);
+                log::debug!("圧縮サイズ: {}", csize);
                 offset += 4;
                 // uncompressed size               4 bytes
                 let ucsize = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
-                println!("DEBUG: uncompressed size: {:?}", ucsize);
+                log::debug!("非圧縮サイズ: {}", ucsize);
                 offset += 4;
                 // file name length                2 bytes
                 let fname_size = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
@@ -78,14 +78,22 @@ impl ArcReader for ZipReader {
                 let ex_length = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // file name (variable size)
-                let file_name = std::str::from_utf8(&buf[offset..(offset+fname_size as usize)]).unwrap();
-                println!("{}", file_name);
+                if offset + fname_size as usize > buf.len() {
+                    return Err(ArchiveError::CorruptedArchive {
+                        message: "ファイル名の範囲が不正です".to_string(),
+                    });
+                }
+                let file_name = std::str::from_utf8(&buf[offset..(offset+fname_size as usize)])
+                    .map_err(|_| ArchiveError::CorruptedArchive {
+                        message: "ファイル名の文字列変換に失敗しました".to_string(),
+                    })?;
+                log::info!("ファイル名: {}", file_name);
                 offset += fname_size as usize;
                 // extra field (variable size)
-                println!("DEBUG: extra field: {:?}", offset);
+                log::debug!("拡張フィールド位置: {}", offset);
                 offset += ex_length as usize;
                 // file entry
-                println!("DEBUG: file entry: {:?}", offset);
+                log::debug!("ファイルエントリ位置: {}", offset);
                 let data_offset = offset;
                 offset += csize as usize;
 
@@ -114,9 +122,19 @@ impl ArcReader for ZipReader {
         Ok(())
     }
 
-    fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
-        buf[offset as usize..offset as usize +size as usize].to_owned()
-        //read_comressed_data(buf,offset,size)
+    fn read_data(buf: &[u8], offset: u64, size: u64) -> ArchiveResult<Vec<u8>> {
+        let start = offset as usize;
+        let end = start + size as usize;
+        
+        if end > buf.len() {
+            return Err(ArchiveError::OutOfBounds {
+                offset,
+                size,
+                buffer_len: buf.len(),
+            });
+        }
+        
+        Ok(buf[start..end].to_owned())
     }
 }
 
@@ -139,23 +157,18 @@ fn read_comressed_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
 //     Rar5Reader::read_archive(&buf, files)
 // }
 
-fn check_zipsign(data : &Vec<u8>) -> (usize, bool) {
-    let mut pos : usize = 0;
-    let mut result : bool = false;
+fn check_zipsign(data: &[u8]) -> ArchiveResult<(usize, bool)> {
+    if data.len() < 4 {
+        return Ok((0, false));
+    }
 
-    for (i, d) in data.iter().enumerate() {
-        if *d == 0x50 as u8 {
-            if data[i+1] == 0x4b &&
-               data[i+2] == 0x03 &&
-               data[i+3] == 0x04 {
-                pos = i;
-                result = true;
-                break;
-            }
+    for (i, window) in data.windows(4).enumerate() {
+        if window == [0x50, 0x4B, 0x03, 0x04] {
+            return Ok((i, true));
         }
     }
 
-    (pos, result)
+    Ok((0, false))
 }
 
 // [Volume header] => total 7 bytes

@@ -2,9 +2,9 @@
 // use std::io::Read;
 use encoding_rs;
 
-use crate::archive_reader::ArcReader;
-use crate::archive_reader::MemberFile;
-use crate::archive_reader::CompressionType;
+use crate::archive_reader::{ArcReader, ArchiveError, ArchiveResult};
+use crate::archive_reader::{MemberFile, CompressionType};
+use log::{info, warn, error, debug};
 
 pub struct Rar4Reader {
     buf: Vec<u8>,
@@ -19,11 +19,11 @@ impl ArcReader for Rar4Reader {
         }
     }
 
-    fn read_archive(buf : &Vec<u8>, files : &mut Vec<MemberFile>) -> Result<(), Box<dyn std::error::Error>> {
+    fn read_archive(buf: &[u8], files: &mut Vec<MemberFile>) -> ArchiveResult<()> {
         let mut offset : usize = 0;
 
         let (pos, is_sign) = check_rarsign(&buf);
-        println!("signature pos : {:?}", pos);
+        log::debug!("RAR4 signature pos : {:?}", pos);
 
         if is_sign {
             offset += pos + 7;  // skip signature
@@ -179,8 +179,19 @@ impl ArcReader for Rar4Reader {
         Ok(())
     }
 
-    fn read_data(buf : &Vec<u8>, offset : u64, size : u64) -> Vec<u8> {
-        buf[offset as usize..offset as usize +size as usize].to_owned()
+    fn read_data(buf: &[u8], offset: u64, size: u64) -> ArchiveResult<Vec<u8>> {
+        let start = offset as usize;
+        let end = start + size as usize;
+        
+        if end > buf.len() {
+            return Err(ArchiveError::OutOfBounds {
+                offset,
+                size,
+                buffer_len: buf.len(),
+            });
+        }
+        
+        Ok(buf[start..end].to_owned())
     }
 }
 
