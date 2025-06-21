@@ -85,7 +85,7 @@ impl ArcReader for Rar5Reader {
 // return (u64, u8)
 //  data : u64 -> vint data
 //  size : u8  -> size of data (bytes), size == MAX(255) means failed to read vint value
-fn read_vint(data : &Vec<u8>, pos : usize) -> (u64, u8) {
+fn read_vint(data: &[u8], pos: usize) -> (u64, u8) {
     let mut offset = 0 as u8;
     let mut val = 0 as u64;
     let mut shift = 0;
@@ -147,14 +147,14 @@ fn check_headertype(data: &[u8], pos: usize) -> u64 {
         offset += 4;
 
         // header size
-        (hsize, vintlen) = read_vint(&data, offset);
+        (hsize, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::u64::MAX;
         }
         offset += vintlen as usize;
 
         // header type
-        (htype, vintlen) = read_vint(&data, offset);
+        (htype, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::u64::MAX;
         }
@@ -180,7 +180,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
         offset += 4;
 
         // header size
-        (hsize, vintlen) = read_vint(&data, offset);
+        (hsize, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -190,7 +190,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
         headerlen = 4 + vintlen as usize + hsize as usize;
 
         // header type
-        (htype, vintlen) = read_vint(&data, offset);
+        (htype, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -206,7 +206,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
 
     // Header flags
     let hflag;
-    (hflag, vintlen) = read_vint(&data, offset);
+    (hflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -214,7 +214,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
 
     // Extra area size
     let extra_size;
-    (extra_size, vintlen) = read_vint(&data, offset);
+    (extra_size, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -222,7 +222,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
 
     // Archive flags
     let aflag;
-    (aflag, vintlen) = read_vint(&data, offset);
+    (aflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -300,7 +300,7 @@ fn check_header_mainarchive(data: &[u8], pos: usize) -> usize {
     // Volume number
     let volnum;
     if is_notfirst {
-        (volnum, vintlen) = read_vint(&data, offset);
+        (volnum, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -329,7 +329,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
         offset += 4;
 
         // header size
-        (hsize, vintlen) = read_vint(&data, offset);
+        (hsize, vintlen) = read_vint(data, offset);
         println!("debug: hsize = {:?}, vintlen = {:?}", hsize, vintlen);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
@@ -340,7 +340,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
         headerlen = 4 + vintlen as usize + hsize as usize;
 
         // header type
-        (htype, vintlen) = read_vint(&data, offset);
+        (htype, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -356,7 +356,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Header flags
     let hflag;
-    (hflag, vintlen) = read_vint(&data, offset);
+    (hflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -417,7 +417,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
     // Extra area size
     let extra_size;
     if is_extra {
-        (extra_size, vintlen) = read_vint(&data, offset);
+        (extra_size, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -430,7 +430,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
     // Data size
     let data_size;
     if is_data {
-        (data_size, vintlen) = read_vint(&data, offset);
+        (data_size, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -442,7 +442,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
     
     // File flag
     let fflag;
-    (fflag, vintlen) = read_vint(&data, offset);
+    (fflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -480,7 +480,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Unpacked size
     let file_size;
-    (file_size, vintlen) = read_vint(&data, offset);
+    (file_size, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -489,7 +489,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Attributes
     let file_attr;
-    (file_attr, vintlen) = read_vint(&data, offset);
+    (file_attr, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -525,7 +525,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Compression information
     let file_comp;
-    (file_comp, vintlen) = read_vint(&data, offset);
+    (file_comp, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -539,7 +539,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Host OS (0:Windows/1:Unix)
     let file_hostos;
-    (file_hostos, vintlen) = read_vint(&data, offset);
+    (file_hostos, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -548,7 +548,7 @@ fn check_header_file(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> us
 
     // Name length
     let file_namelen;
-    (file_namelen, vintlen) = read_vint(&data, offset);
+    (file_namelen, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -621,7 +621,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
         offset += 4;
 
         // header size
-        (hsize, vintlen) = read_vint(&data, offset);
+        (hsize, vintlen) = read_vint(data, offset);
         println!("debug: hsize = {:?}, vintlen = {:?}", hsize, vintlen);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
@@ -632,7 +632,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
         headerlen = 4 + vintlen as usize + hsize as usize;
 
         // header type
-        (htype, vintlen) = read_vint(&data, offset);
+        (htype, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -648,7 +648,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Header flags
     let hflag;
-    (hflag, vintlen) = read_vint(&data, offset);
+    (hflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -709,7 +709,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
     // Extra area size
     let extra_size;
     if is_extra {
-        (extra_size, vintlen) = read_vint(&data, offset);
+        (extra_size, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -722,7 +722,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
     // Data size
     let data_size;
     if is_data {
-        (data_size, vintlen) = read_vint(&data, offset);
+        (data_size, vintlen) = read_vint(data, offset);
         if vintlen == std::u8::MAX {
             return std::usize::MAX;
         }
@@ -734,7 +734,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
     
     // File flag
     let fflag;
-    (fflag, vintlen) = read_vint(&data, offset);
+    (fflag, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -772,7 +772,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Unpacked size
     let file_size;
-    (file_size, vintlen) = read_vint(&data, offset);
+    (file_size, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -781,7 +781,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Attributes
     let file_attr;
-    (file_attr, vintlen) = read_vint(&data, offset);
+    (file_attr, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -817,7 +817,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Compression information
     let file_comp;
-    (file_comp, vintlen) = read_vint(&data, offset);
+    (file_comp, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -826,7 +826,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Host OS (0:Windows/1:Unix)
     let file_hostos;
-    (file_hostos, vintlen) = read_vint(&data, offset);
+    (file_hostos, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }
@@ -835,7 +835,7 @@ fn check_header_service(data: &[u8], pos: usize) -> usize {
 
     // Name length
     let file_namelen;
-    (file_namelen, vintlen) = read_vint(&data, offset);
+    (file_namelen, vintlen) = read_vint(data, offset);
     if vintlen == std::u8::MAX {
         return std::usize::MAX;
     }

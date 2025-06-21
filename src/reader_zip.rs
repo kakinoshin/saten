@@ -162,10 +162,8 @@ fn check_zipsign(data: &[u8]) -> ArchiveResult<(usize, bool)> {
         return Ok((0, false));
     }
 
-    for (i, window) in data.windows(4).enumerate() {
-        if window == [0x50, 0x4B, 0x03, 0x04] {
-            return Ok((i, true));
-        }
+    if &data[0..4] == [0x50, 0x4B, 0x03, 0x04] {
+        return Ok((0, true));
     }
 
     Ok((0, false))
@@ -176,7 +174,7 @@ fn check_zipsign(data: &[u8]) -> ArchiveResult<(usize, bool)> {
 //  header_type   1 byte
 //  header_flags  2 bytes
 //  header_size   2 bytes
-fn check_headertype(data : &Vec<u8>, pos : usize) -> (u8, u16, u16) {
+fn check_headertype(data: &[u8], pos: usize) -> (u8, u16, u16) {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
 

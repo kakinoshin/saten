@@ -203,7 +203,7 @@ impl ArcReader for Rar4Reader {
 //     Rar5Reader::read_archive(&buf, files)
 // }
 
-fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
+fn check_rarsign(data: &[u8]) -> (usize, bool) {
     let mut pos : usize = 0;
     let mut result : bool = false;
 
@@ -231,7 +231,7 @@ fn check_rarsign(data : &Vec<u8>) -> (usize, bool) {
 //  header_type   1 byte
 //  header_flags  2 bytes
 //  header_size   2 bytes
-fn check_headertype(data : &Vec<u8>, pos : usize) -> (u8, u16, u16) {
+fn check_headertype(data: &[u8], pos: usize) -> (u8, u16, u16) {
     let mut offset : usize = pos;
     let mut vintlen : u8 = 0;
 

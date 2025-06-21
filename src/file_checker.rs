@@ -37,7 +37,6 @@ fn check_signature(data: &[u8], signature: &[u8]) -> bool {
         return false;
     }
 
-    // ファイルの先頭からシグネチャを探す
-    data.windows(signature.len())
-        .any(|window| window == signature)
+    // ファイルの先頭のシグネチャをチェック
+    &data[0..signature.len()] == signature
 }
