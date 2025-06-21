@@ -40,7 +40,15 @@ impl ArcReader for Rar4Reader {
                 println!("header type : {:#02x}", htype);
                 offset += 7;
 
-                if htype == 0x73 {  // MAIN_HEAD (0x73)
+                if hsize == 0 {
+                    println!("Invalid header size");
+                    break;
+                }
+
+                if htype == 0x72 {      // MARK_HEAD (0x72)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x73 {  // MAIN_HEAD (0x73)
                     println!("DEBUG: [MAIN_HEAD] - 0x73");
                     println!("DEBUG: HighPosAv: {:#02x} {:#02x}", buf[offset], buf[offset+1]);
                     println!("DEBUG: PosAv: {:#02x} {:#02x} {:#02x} {:#02x}", buf[offset+2], buf[offset+3], buf[offset+4], buf[offset+5]);
@@ -77,7 +85,7 @@ impl ArcReader for Rar4Reader {
                         println!("DEBUG: HighUnpSize");
                         offset += 4;    // HighUnpSize
                     }
-                    let mut endpos = offset;
+                    let mut endpos = offset+nsize as usize;
                     for i in offset..(offset+nsize as usize) {
                         if buf[i] == 0 {
                             endpos = i;
@@ -107,9 +115,10 @@ impl ArcReader for Rar4Reader {
                     }
                     if (hflags & 0x1000) != 0 { //LHD_EXTTIME
                         println!("DEBUG: ExtTime_Structure");
+                        offset += 2;    // section flags (4bit x 4 sections)
                         offset += 4;    // ExtTime_Structure
                     }
-                    offset += 9;    // adjust (??)
+                    //offset += 9;    // adjust (??)
                     let data_offset = offset as u64;
                     offset += psize as usize;   // Packaed Data
                     //println!("DEBUG: offset: {:#08x}", offset);
@@ -136,14 +145,33 @@ impl ArcReader for Rar4Reader {
                             ctype: ctype,
                         });
                     }
-                } else if htype == 0x7a {  // NEWSUB_HEAD (0x7a)
+                } else if htype == 0x75	{   // COMM_HEAD (0x75)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x76	{   // AV_HEAD (0x76)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x77	{   // SUB_HEAD (0x77)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x78	{   // PROTECT_HEAD (0x78)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x79	{   // SIGN_HEAD (0x79)
+                    println!("Not supported header type ({})", htype);
+                    break;
+                } else if htype == 0x7a {   // NEWSUB_HEAD (0x7a)
                     println!("DEBUG: [NEWSUB_HEAD] - 0x7a");
                     let newsub_size = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
                     println!("DEBUG: Size: {}", newsub_size);
                     offset += (hsize as usize) - 7; // skip header
                     offset += newsub_size as usize; // skip newsub body
+                } else if htype == 0x7b {   // ENDARC_HEAD (0x7b)
+                    println!("Not supported header type ({})", htype);
+                    break;
                 } else {
-                    offset += (hsize as usize) - 7;
+                    println!("Not supported header type ({})", htype);
+                    break;
                 }
             }
         }
@@ -209,7 +237,7 @@ fn check_headertype(data : &Vec<u8>, pos : usize) -> (u8, u16, u16) {
         offset += 1;
 
         // header flags
-        hflags = (data[offset] as u16) << 8 | (data[offset] as u16);
+        hflags = (data[offset+1] as u16) << 8 | (data[offset] as u16);
         offset += 2;
 
         // header size
