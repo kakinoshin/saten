@@ -18,6 +18,7 @@ pub mod archive_reader;
 pub mod file_checker;
 pub mod sort_filename;
 pub mod compress_deflate;
+pub mod rar_handler;
 
 #[cfg(test)]
 mod tests {
