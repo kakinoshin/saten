@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use log::{info, error, debug};
-use iced::Command;
+use iced::Task;
 
 use crate::model::app_state::AppState;
 use crate::model::archive_manager::ArchiveManager;
@@ -18,14 +18,14 @@ impl FileHandler {
     pub fn handle_file_drop(
         state: &mut AppState,
         path: PathBuf
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         debug!("ファイルがドロップされました: {:?}", path);
         
         // ファイルパスを設定
         state.set_file_path(path.clone());
 
         // 非同期でファイルを読み込み
-        Command::perform(
+        Task::perform(
             async move {
                 Self::load_file_async(path).await
             },
@@ -127,9 +127,9 @@ impl FileHandler {
     pub fn handle_multiple_files_drop(
         state: &mut AppState,
         paths: Vec<PathBuf>
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         if paths.is_empty() {
-            return Command::none();
+            return Task::none();
         }
 
         // 最初のサポートされているファイルを選択
@@ -141,7 +141,7 @@ impl FileHandler {
 
         // サポートされているファイルが見つからない場合
         error!("サポートされているファイルが見つかりませんでした");
-        Command::perform(
+        Task::perform(
             async { "サポートされているファイルがありません".to_string() },
             Message::ShowError
         )
@@ -154,9 +154,9 @@ impl FileHandler {
     }
 
     /// ファイル読み込みキャンセル（将来の拡張用）
-    pub fn cancel_file_loading() -> Command<Message> {
+    pub fn cancel_file_loading() -> Task<Message> {
         info!("ファイル読み込みをキャンセルしました");
-        Command::none()
+        Task::none()
     }
 
     /// 最近使用したファイルの管理（将来の拡張用）

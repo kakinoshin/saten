@@ -1,6 +1,5 @@
 use iced::{
     Alignment, Element, Length,
-    alignment,
 };
 use iced::widget::{
     Container, Text, Column, Row, Space,
@@ -21,8 +20,8 @@ impl LayoutHelper {
         Container::new(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x()
-            .center_y()
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
     }
 
     /// フルサイズのコンテナを作成
@@ -53,7 +52,7 @@ impl LayoutHelper {
     pub fn vertical_layout() -> Column<'static, Message> {
         Column::new()
             .width(Length::Fill)
-            .align_items(Alignment::Start)
+            .align_x(Alignment::Start)
             .spacing(4)
     }
 
@@ -61,7 +60,7 @@ impl LayoutHelper {
     pub fn horizontal_layout() -> Row<'static, Message> {
         Row::new()
             .width(Length::Fill)
-            .align_items(Alignment::Center)
+            .align_y(Alignment::Center)
             .spacing(4)
     }
 
@@ -110,21 +109,21 @@ impl LayoutHelper {
     pub fn create_error_message(message: &str) -> Text<'static> {
         Text::new(format!("エラー: {}", message))  // format!で所有データを作成
             .size(14)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.2, 0.2)))
+            .color(iced::Color::from_rgb(0.8, 0.2, 0.2))
     }
 
     /// 成功メッセージを作成
     pub fn create_success_message(message: &str) -> Text<'static> {
         Text::new(message.to_string())  // 借用データを所有データに変換
             .size(14)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.2, 0.8, 0.2)))
+            .color(iced::Color::from_rgb(0.2, 0.8, 0.2))
     }
 
     /// 警告メッセージを作成
     pub fn create_warning_message(message: &str) -> Text<'static> {
         Text::new(format!("警告: {}", message))  // format!で所有データを作成
             .size(14)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.6, 0.2)))
+            .color(iced::Color::from_rgb(0.8, 0.6, 0.2))
     }
 
     /// 2列レイアウトを作成
@@ -187,7 +186,7 @@ impl LayoutHelper {
     {
         Container::new(content)
             .max_width(max_width)
-            .center_x()
+            .align_x(Alignment::Center)
             .padding(16)
     }
 }

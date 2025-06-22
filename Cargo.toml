@@ -6,59 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iced = {version = "0.10", features = ["image"]}
-regex = "1.9.4"
-flate2 = "1.0"
-image = "0.24.7"
-encoding_rs = "0.8.33"
-thiserror = "1.0"
+iced = {version = "0.13.1", features = ["image"]}
 log = "0.4"
-
-# RAR4/RAR5圧縮対応のための追加依存関係
-# 注意: RAR4/RAR5の完全な圧縮アルゴリズムは専有技術のため、
-# オープンソースでの完全な実装は困難です
-libflate = { version = "2.0", optional = true }      # より詳細なDeflate制御
-lz4_flex = { version = "0.11", optional = true }     # LZ4圧縮（RAR4の一部で使用される場合がある）
-brotli = { version = "3.3", optional = true }        # Brotli圧縮
-
-# より包括的なアーカイブ対応
-zip = { version = "0.6", optional = true }           # ZIP形式の完全対応
-tar = { version = "0.4", optional = true }           # TAR形式対応
-
-# エラーハンドリングとロギングの強化
-anyhow = { version = "1.0", optional = true }        # エラーハンドリングの簡素化
-env_logger = { version = "0.10", optional = true }   # ログ出力の改善
-
-# パフォーマンス最適化
-rayon = { version = "1.7", optional = true }         # 並列処理
-memmap2 = { version = "0.7", optional = true }       # メモリマップファイル
+thiserror = "1.0"
+image = "0.24.7"
+flate2 = "1.0"
+encoding_rs = "0.8.33"
 
 [features]
-default = ["rar-basic"]
-
-# RAR4/RAR5の基本対応（無圧縮 + 簡単なDeflate）
-rar-basic = []
-
-# 実験的なRAR圧縮対応（制限あり）
-rar-experimental = ["libflate", "lz4_flex", "brotli"]
-
-# 包括的なアーカイブ対応
-full-archive-support = ["zip", "tar"]
-
-# エラーハンドリングとロギングの強化
-enhanced-logging = ["anyhow", "env_logger"]
-
-# パフォーマンス最適化
-performance = ["rayon", "memmap2"]
-
-# 開発時に全機能を有効にする
-dev-all = [
-    "rar-experimental", 
-    "full-archive-support", 
-    "enhanced-logging", 
-    "performance"
-]
-
-[dev-dependencies]
-# テスト用の依存関係
-tempfile = "3.0"       # 一時ファイル作成用
+default = []

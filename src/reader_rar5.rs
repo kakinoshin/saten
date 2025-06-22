@@ -336,7 +336,7 @@ fn process_file_header(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> 
     // Header size
     let (hsize, vintlen) = read_vint(data, offset)?;
     offset += vintlen as usize;
-    let header_len = 4 + vintlen as usize + hsize as usize;
+    let _header_len = 4 + vintlen as usize + hsize as usize;
 
     // Header type
     let (htype, vintlen) = read_vint(data, offset)?;
@@ -386,7 +386,7 @@ fn process_file_header(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> 
     offset += vintlen as usize;
 
     // Attributes
-    let (file_attr, vintlen) = read_vint(data, offset)?;
+    let (_file_attr, vintlen) = read_vint(data, offset)?;
     offset += vintlen as usize;
 
     // Unix time (optional)
@@ -428,7 +428,7 @@ fn process_file_header(data: &[u8], pos: usize, files: &mut Vec<MemberFile>) -> 
         comp_version, is_solid, comp_method, dict_size);
 
     // Host OS
-    let (host_os, vintlen) = read_vint(data, offset)?;
+    let (_host_os, vintlen) = read_vint(data, offset)?;
     offset += vintlen as usize;
 
     // Name length

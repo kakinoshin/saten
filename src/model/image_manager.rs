@@ -19,21 +19,22 @@ impl ImageManager {
         if rotate {
             let pimg = image::load_from_memory(data)?;
             let rotated = pimg.rotate180();
-            let bytes = rotated.clone().into_rgba8().into_raw();
-            Ok(Handle::from_pixels(
-                rotated.width(),
-                rotated.height(),
-                bytes,
+            let rgba_image = rotated.to_rgba8();
+            Ok(Handle::from_rgba(
+                rgba_image.width(),
+                rgba_image.height(),
+                rgba_image.into_raw(),
             ))
         } else {
-            Ok(Handle::from_memory(data.to_vec()))
+            // データをコピーして所有権を移転
+            Ok(Handle::from_bytes(data.to_vec()))
         }
     }
 
     /// エラー用の赤い画像を作成
     pub fn create_error_image() -> Handle {
         let pimg = ImageBuffer::from_pixel(64, 64, image::Rgba([255, 0, 0, 255]));
-        Handle::from_pixels(
+        Handle::from_rgba(
             pimg.width(),
             pimg.height(),
             pimg.into_vec(),

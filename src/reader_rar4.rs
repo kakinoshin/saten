@@ -221,7 +221,7 @@ fn process_file_header(
     buf: &[u8],
     mut offset: usize,
     hflags: u16,
-    hsize: u16,
+    _hsize: u16,
     files: &mut Vec<MemberFile>,
 ) -> ArchiveResult<usize> {
     debug!("Processing FILE_HEAD (0x74)");
@@ -256,7 +256,7 @@ fn process_file_header(
     offset += 1;
 
     // Method (1 byte)
-    let method = buf[offset];
+    let _method = buf[offset];
     offset += 1;
 
     // NameSize (2 bytes)

@@ -1,6 +1,5 @@
 use iced::{
     Alignment, Element, Length,
-    alignment,
 };
 use iced::widget::{
     Container, Text, Column, Row,
@@ -8,7 +7,6 @@ use iced::widget::{
 
 use crate::model::app_state::{AppState, DisplayMode};
 use crate::view::image_view::ImageView;
-use crate::view::layout::LayoutHelper;
 use crate::controller::app_controller::Message;
 
 pub struct AppView;
@@ -40,7 +38,7 @@ impl AppView {
         // メインコンテンツを組み立て
         let content = Column::new()
             .width(Length::Fill)
-            .align_items(Alignment::Start)
+            .align_x(Alignment::Start)
             .push(path_display)
             .push(image_display);
 
@@ -77,7 +75,7 @@ impl AppView {
 
         let content = Column::new()
             .width(Length::Fill)
-            .align_items(Alignment::Start)
+            .align_x(Alignment::Start)
             .push(double_view);
 
         Container::new(content)
@@ -116,15 +114,15 @@ impl AppView {
         // エラーメッセージを所有データとして作成
         let error_text = Text::new(format!("エラー: {}", error_message))
             .size(18)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(1.0, 0.0, 0.0)));
+            .color(iced::Color::from_rgb(1.0, 0.0, 0.0));
 
         let content = Column::new()
             .width(Length::Fill)
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .push(
                 Container::new(error_text)
-                    .center_x()
-                    .center_y()
+                    .align_x(Alignment::Center)
+                    .align_y(Alignment::Center)
                     .width(Length::Fill)
                     .height(Length::Fill)
             );
@@ -142,11 +140,11 @@ impl AppView {
 
         let content = Column::new()
             .width(Length::Fill)
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .push(
                 Container::new(loading_text)
-                    .center_x()
-                    .center_y()
+                    .align_x(Alignment::Center)
+                    .align_y(Alignment::Center)
                     .width(Length::Fill)
                     .height(Length::Fill)
             );

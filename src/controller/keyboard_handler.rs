@@ -1,5 +1,5 @@
 use log::{debug, info};
-use iced::keyboard::{Event as KeyboardEvent, KeyCode};
+use iced::keyboard::{Event as KeyboardEvent, Key};
 
 use crate::model::app_state::{AppState, DisplayMode};
 use crate::model::page_manager::PageManager;
@@ -17,8 +17,8 @@ impl KeyboardHandler {
         event: KeyboardEvent
     ) {
         match event {
-            KeyboardEvent::KeyPressed { key_code, modifiers } => {
-                Self::handle_key_press(state, key_code, modifiers);
+            KeyboardEvent::KeyPressed { key, modifiers, .. } => {
+                Self::handle_key_press(state, key, modifiers);
             }
             KeyboardEvent::KeyReleased { .. } => {
                 // キーリリースイベントは現在未使用
@@ -30,74 +30,74 @@ impl KeyboardHandler {
     /// キー押下イベントの処理
     fn handle_key_press(
         state: &mut AppState,
-        key_code: KeyCode,
+        key: Key,
         _modifiers: iced::keyboard::Modifiers
     ) {
-        match key_code {
+        match key.as_ref() {
             // ページナビゲーション
-            KeyCode::Left => {
+            Key::Named(iced::keyboard::key::Named::ArrowLeft) => {
                 debug!("← キーが押されました");
                 PageManager::next_page(state);
             }
-            KeyCode::Right => {
+            Key::Named(iced::keyboard::key::Named::ArrowRight) => {
                 debug!("→ キーが押されました");
                 PageManager::previous_page(state);
             }
             
             // ファイルナビゲーション（上下キー）
-            KeyCode::Up => {
+            Key::Named(iced::keyboard::key::Named::ArrowUp) => {
                 debug!("↑ キーが押されました");
                 PageManager::previous_file(state);
             }
-            KeyCode::Down => {
+            Key::Named(iced::keyboard::key::Named::ArrowDown) => {
                 debug!("↓ キーが押されました");
                 PageManager::next_file(state);
             }
 
             // 表示モード切り替え
-            KeyCode::Key1 => {
+            Key::Character(ref c) if matches!(c.as_ref(), "1") => {
                 debug!("1 キーが押されました");
                 PageManager::set_display_mode(state, DisplayMode::Single);
             }
-            KeyCode::Key2 => {
+            Key::Character(ref c) if matches!(c.as_ref(), "2") => {
                 debug!("2 キーが押されました");
                 PageManager::set_display_mode(state, DisplayMode::Double);
             }
 
             // 回転モード切り替え
-            KeyCode::R => {
+            Key::Character(ref c) if matches!(c.as_ref(), "r" | "R") => {
                 debug!("R キーが押されました");
                 PageManager::toggle_rotate_mode(state);
             }
 
             // ページジャンプ
-            KeyCode::Home => {
+            Key::Named(iced::keyboard::key::Named::Home) => {
                 debug!("Home キーが押されました");
                 PageManager::goto_first_page(state);
             }
-            KeyCode::End => {
+            Key::Named(iced::keyboard::key::Named::End) => {
                 debug!("End キーが押されました");
                 PageManager::goto_last_page(state);
             }
 
             // ページ送り（Page Up/Down）
-            KeyCode::PageUp => {
+            Key::Named(iced::keyboard::key::Named::PageUp) => {
                 debug!("Page Up キーが押されました");
                 PageManager::previous_page(state);
             }
-            KeyCode::PageDown => {
+            Key::Named(iced::keyboard::key::Named::PageDown) => {
                 debug!("Page Down キーが押されました");
                 PageManager::next_page(state);
             }
 
             // スペースキー（ページ送り）
-            KeyCode::Space => {
+            Key::Named(iced::keyboard::key::Named::Space) => {
                 debug!("Space キーが押されました");
                 PageManager::next_page(state);
             }
 
             // Backspace（戻る）
-            KeyCode::Backspace => {
+            Key::Named(iced::keyboard::key::Named::Backspace) => {
                 debug!("Backspace キーが押されました");
                 PageManager::previous_page(state);
             }
@@ -105,7 +105,7 @@ impl KeyboardHandler {
             // その他のキー
             _ => {
                 // 未定義のキーは無視
-                debug!("未定義のキーが押されました: {:?}", key_code);
+                debug!("未定義のキーが押されました: {:?}", key);
             }
         }
     }
@@ -113,27 +113,27 @@ impl KeyboardHandler {
     /// 修飾キーを考慮したキー処理
     pub fn handle_key_with_modifiers(
         state: &mut AppState,
-        key_code: KeyCode,
+        key: Key,
         modifiers: iced::keyboard::Modifiers
     ) {
         if modifiers.shift() {
-            Self::handle_shift_key_combination(state, key_code);
+            Self::handle_shift_key_combination(state, key);
         } else if modifiers.control() {
-            Self::handle_ctrl_key_combination(state, key_code);
+            Self::handle_ctrl_key_combination(state, key);
         } else if modifiers.alt() {
-            Self::handle_alt_key_combination(state, key_code);
+            Self::handle_alt_key_combination(state, key);
         } else {
-            Self::handle_key_press(state, key_code, modifiers);
+            Self::handle_key_press(state, key, modifiers);
         }
     }
 
     /// Shift + キーの組み合わせ処理
     fn handle_shift_key_combination(
         state: &mut AppState,
-        key_code: KeyCode
+        key: Key
     ) {
-        match key_code {
-            KeyCode::Left => {
+        match key.as_ref() {
+            Key::Named(iced::keyboard::key::Named::ArrowLeft) => {
                 debug!("Shift + ← キーが押されました");
                 // 大きくページを戻る（10ページ）
                 for _ in 0..10 {
@@ -143,7 +143,7 @@ impl KeyboardHandler {
                     }
                 }
             }
-            KeyCode::Right => {
+            Key::Named(iced::keyboard::key::Named::ArrowRight) => {
                 debug!("Shift + → キーが押されました");
                 // 大きくページを進める（10ページ）
                 for _ in 0..10 {
@@ -154,7 +154,7 @@ impl KeyboardHandler {
                 }
             }
             _ => {
-                debug!("未定義のShift組み合わせ: {:?}", key_code);
+                debug!("未定義のShift組み合わせ: {:?}", key);
             }
         }
     }
@@ -162,39 +162,39 @@ impl KeyboardHandler {
     /// Ctrl + キーの組み合わせ処理
     fn handle_ctrl_key_combination(
         state: &mut AppState,
-        key_code: KeyCode
+        key: Key
     ) {
-        match key_code {
-            KeyCode::R => {
+        match key.as_ref() {
+            Key::Character(ref c) if matches!(c.as_ref(), "r" | "R") => {
                 debug!("Ctrl + R キーが押されました");
                 // アプリケーションのリセット
                 state.reset();
                 info!("アプリケーションがリセットされました");
             }
-            KeyCode::Q => {
+            Key::Character(ref c) if matches!(c.as_ref(), "q" | "Q") => {
                 debug!("Ctrl + Q キーが押されました");
                 // 終了コマンド（実際の終了は上位で処理）
                 info!("終了が要求されました");
             }
             _ => {
-                debug!("未定義のCtrl組み合わせ: {:?}", key_code);
+                debug!("未定義のCtrl組み合わせ: {:?}", key);
             }
         }
     }
 
     /// Alt + キーの組み合わせ処理
     fn handle_alt_key_combination(
-        state: &mut AppState,
-        key_code: KeyCode
+        _state: &mut AppState,
+        key: Key
     ) {
-        match key_code {
-            KeyCode::Enter => {
+        match key.as_ref() {
+            Key::Named(iced::keyboard::key::Named::Enter) => {
                 debug!("Alt + Enter キーが押されました");
                 // フルスクリーン切り替え（将来の実装用）
                 info!("フルスクリーン切り替え（未実装）");
             }
             _ => {
-                debug!("未定義のAlt組み合わせ: {:?}", key_code);
+                debug!("未定義のAlt組み合わせ: {:?}", key);
             }
         }
     }

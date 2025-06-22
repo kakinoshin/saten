@@ -1,6 +1,5 @@
 use iced::{
     Alignment, Element, Length,
-    alignment,
 };
 use iced::widget::{
     Container, Row,
@@ -28,12 +27,12 @@ impl ImageView {
         let handle = Self::get_image_handle(state, file_index);
 
         Container::new(
-            iced::widget::image::Viewer::new(handle)
+            iced::widget::Image::new(handle)
         )
         .height(Length::Fill)
         .width(Length::Fill)
-        .align_x(alignment::Horizontal::Center)
-        .align_y(alignment::Vertical::Center)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
     }
 
     /// ダブル画像表示を作成
@@ -49,24 +48,24 @@ impl ImageView {
         };
 
         let image_left = Container::new(
-            iced::widget::image::Viewer::new(left_handle)
+            iced::widget::Image::new(left_handle)
         )
         .height(Length::Fill)
         .width(Length::Fill)
-        .align_x(alignment::Horizontal::Right)
-        .align_y(alignment::Vertical::Center);
+        .align_x(Alignment::End)
+        .align_y(Alignment::Center);
 
         let image_right = Container::new(
-            iced::widget::image::Viewer::new(right_handle)
+            iced::widget::Image::new(right_handle)
         )
         .height(Length::Fill)
         .width(Length::Fill)
-        .align_x(alignment::Horizontal::Left)
-        .align_y(alignment::Vertical::Center);
+        .align_x(Alignment::Start)
+        .align_y(Alignment::Center);
 
         Row::new()
             .width(Length::Fill)
-            .align_items(Alignment::Start)
+            .align_y(Alignment::Start)
             .push(image_left)
             .push(image_right)
     }
@@ -114,7 +113,7 @@ impl ImageView {
         let handle = Self::get_image_handle(state, file_index);
 
         Container::new(
-            iced::widget::image::Viewer::new(handle)
+            iced::widget::Image::new(handle)
         )
         .width(Length::Fixed(size as f32))
         .height(Length::Fixed(size as f32))

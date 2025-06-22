@@ -46,22 +46,22 @@ impl ArcReader for ZipReader {
                 offset += 4;
 
                 // version needed to extract       2 bytes
-                let ver = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
+                let _ver = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // general purpose bit flag        2 bytes
-                let gpflag = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
+                let _gpflag = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // compression method              2 bytes
                 let comp = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // last mod file time              2 bytes
-                let file_time = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
+                let _file_time = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // last mod file date              2 bytes
-                let file_date = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
+                let _file_date = (buf[offset+1] as u16) << 8 | (buf[offset] as u16);
                 offset += 2;
                 // crc-32                          4 bytes
-                let crc32 = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
+                let _crc32 = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
                 offset += 4;
                 // compressed size                 4 bytes
                 let csize = (buf[offset+3] as u32) << 24 | (buf[offset+2] as u32) << 16 | (buf[offset+1] as u32) << 8 | (buf[offset] as u32);
@@ -176,7 +176,7 @@ fn check_zipsign(data: &[u8]) -> ArchiveResult<(usize, bool)> {
 //  header_size   2 bytes
 fn check_headertype(data: &[u8], pos: usize) -> (u8, u16, u16) {
     let mut offset : usize = pos;
-    let mut vintlen : u8 = 0;
+    let _vintlen : u8 = 0;
 
     let htype : u8;
     let hflags : u16;

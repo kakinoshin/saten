@@ -1,8 +1,7 @@
 use log::{info, warn, error, debug};
-use iced::Command;
+use iced::Task;
 
 use crate::model::app_state::{AppState, DisplayMode};
-use crate::model::archive_manager::ArchiveManager;
 use crate::model::page_manager::PageManager;
 use crate::controller::keyboard_handler::KeyboardHandler;
 use crate::controller::file_handler::FileHandler;
@@ -26,7 +25,7 @@ impl AppController {
     pub fn update(
         state: &mut AppState,
         message: Message
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         match message {
             Message::EventOccurred(event) => {
                 Self::handle_event(state, event)
@@ -36,11 +35,11 @@ impl AppController {
             }
             Message::ShowError(message) => {
                 error!("エラー: {}", message);
-                Command::none()
+                Task::none()
             }
             Message::ShowSuccess(message) => {
                 info!("成功: {}", message);
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -49,16 +48,16 @@ impl AppController {
     fn handle_event(
         state: &mut AppState,
         event: iced::event::Event
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         match event {
             iced::event::Event::Window(window_event) => {
                 Self::handle_window_event(state, window_event)
             }
             iced::event::Event::Keyboard(keyboard_event) => {
                 KeyboardHandler::handle_keyboard_event(state, keyboard_event);
-                Command::none()
+                Task::none()
             }
-            _ => Command::none(),
+            _ => Task::none(),
         }
     }
 
@@ -66,12 +65,12 @@ impl AppController {
     fn handle_window_event(
         state: &mut AppState,
         window_event: iced::window::Event
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         match window_event {
             iced::window::Event::FileDropped(path) => {
                 FileHandler::handle_file_drop(state, path)
             }
-            _ => Command::none(),
+            _ => Task::none(),
         }
     }
 
@@ -79,18 +78,18 @@ impl AppController {
     fn handle_file_loaded(
         state: &mut AppState,
         result: Result<(Vec<u8>, Vec<crate::archive_reader::MemberFile>), String>
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         match result {
             Ok((buffer, files)) => {
                 state.set_archive_buffer(buffer);
                 state.set_archive_files(files);
                 info!("ファイルの読み込みが完了しました: {} 個のファイル", state.total_files);
-                Command::none()
+                Task::none()
             }
             Err(error_message) => {
                 error!("ファイルの読み込みに失敗: {}", error_message);
                 state.reset();
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -141,40 +140,40 @@ impl AppController {
     }
 
     /// エラー処理
-    pub fn handle_error(error: &str) -> Command<Message> {
+    pub fn handle_error(error: &str) -> Task<Message> {
         error!("エラーが発生しました: {}", error);
         // 借用データを所有データに変換してからasync moveに渡す
         let error_message = error.to_string();
-        Command::perform(
+        Task::perform(
             async move { error_message },
             Message::ShowError
         )
     }
 
     /// 成功メッセージの処理
-    pub fn handle_success(message: &str) -> Command<Message> {
+    pub fn handle_success(message: &str) -> Task<Message> {
         info!("処理が成功しました: {}", message);
         // 借用データを所有データに変換してからasync moveに渡す
         let success_message = message.to_string();
-        Command::perform(
+        Task::perform(
             async move { success_message },
             Message::ShowSuccess
         )
     }
 
     /// エラー処理（String版）- パフォーマンスを重視する場合
-    pub fn handle_error_owned(error: String) -> Command<Message> {
+    pub fn handle_error_owned(error: String) -> Task<Message> {
         error!("エラーが発生しました: {}", error);
-        Command::perform(
+        Task::perform(
             async move { error },
             Message::ShowError
         )
     }
 
     /// 成功メッセージの処理（String版）- パフォーマンスを重視する場合
-    pub fn handle_success_owned(message: String) -> Command<Message> {
+    pub fn handle_success_owned(message: String) -> Task<Message> {
         info!("処理が成功しました: {}", message);
-        Command::perform(
+        Task::perform(
             async move { message },
             Message::ShowSuccess
         )
@@ -193,9 +192,9 @@ impl AppController {
     }
 
     /// アプリケーションの初期化
-    pub fn initialize() -> (AppState, Command<Message>) {
+    pub fn initialize() -> (AppState, Task<Message>) {
         let state = AppState::new();
-        let command = Command::none();
+        let command = Task::none();
         (state, command)
     }
 
@@ -206,17 +205,17 @@ impl AppController {
     }
 
     /// 設定の保存（将来の拡張用）
-    pub fn save_settings(_state: &AppState) -> Command<Message> {
+    pub fn save_settings(_state: &AppState) -> Task<Message> {
         debug!("設定を保存します（未実装）");
         // 将来的にはファイルに設定を保存する処理を追加
-        Command::none()
+        Task::none()
     }
 
     /// 設定の読み込み（将来の拡張用）
-    pub fn load_settings() -> Command<Message> {
+    pub fn load_settings() -> Task<Message> {
         debug!("設定を読み込みます（未実装）");
         // 将来的にはファイルから設定を読み込む処理を追加
-        Command::none()
+        Task::none()
     }
 
     /// アプリケーションの終了処理
@@ -229,7 +228,7 @@ impl AppController {
     pub fn handle_result<T, E: std::fmt::Display>(
         result: Result<T, E>, 
         success_msg: &str
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         match result {
             Ok(_) => Self::handle_success(success_msg),
             Err(error) => Self::handle_error(&error.to_string()),
@@ -237,9 +236,9 @@ impl AppController {
     }
 
     /// 複数のエラーを統合してハンドリング
-    pub fn handle_multiple_errors(errors: Vec<String>) -> Command<Message> {
+    pub fn handle_multiple_errors(errors: Vec<String>) -> Task<Message> {
         if errors.is_empty() {
-            return Command::none();
+            return Task::none();
         }
 
         let combined_error = if errors.len() == 1 {
@@ -252,11 +251,11 @@ impl AppController {
     }
 
     /// 警告メッセージの処理
-    pub fn handle_warning(warning: &str) -> Command<Message> {
+    pub fn handle_warning(warning: &str) -> Task<Message> {
         warn!("警告: {}", warning);
         // 警告は現在ログのみで、UIには表示しない
         // 将来的にはMessage::ShowWarningを追加することも可能
-        Command::none()
+        Task::none()
     }
 }
 
