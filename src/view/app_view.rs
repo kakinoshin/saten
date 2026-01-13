@@ -39,7 +39,7 @@ impl AppView {
         let content = Column::new()
             .width(Length::Fill)
             .align_x(Alignment::Start)
-            .push(path_display)
+            //.push(path_display)
             .push(image_display);
 
         Container::new(content)
