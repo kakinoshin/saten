@@ -162,6 +162,12 @@ impl PageManager {
         info!("回転モード: {}", if state.rotate_mode { "ON" } else { "OFF" });
     }
 
+    /// フリップモードの切り替え（左右入れ替え）
+    pub fn toggle_flip_mode(state: &mut AppState) {
+        state.flip_mode = !state.flip_mode;
+        info!("フリップモード: {}", if state.flip_mode { "ON" } else { "OFF" });
+    }
+
     /// ページ情報の文字列表現を取得
     pub fn get_page_info_string(state: &AppState) -> String {
         match state.display_mode {

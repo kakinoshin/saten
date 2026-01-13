@@ -26,6 +26,8 @@ pub struct AppState {
     pub archive_buffer: Vec<u8>,
     pub display_mode: DisplayMode,
     pub rotate_mode: bool,
+    /// Flip left/right image positions in dual view (for RTL/LTR reading)
+    pub flip_mode: bool,
 }
 
 impl AppState {
@@ -65,6 +67,11 @@ impl AppState {
     /// 回転モードの切り替え
     pub fn toggle_rotate_mode(&mut self) {
         self.rotate_mode = !self.rotate_mode;
+    }
+
+    /// フリップモードの切り替え（左右入れ替え）
+    pub fn toggle_flip_mode(&mut self) {
+        self.flip_mode = !self.flip_mode;
     }
 
     /// 次のページへ移動（ダブルページの場合は2つ進む）

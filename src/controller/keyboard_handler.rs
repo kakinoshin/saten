@@ -70,6 +70,12 @@ impl KeyboardHandler {
                 PageManager::toggle_rotate_mode(state);
             }
 
+            // フリップモード切り替え（左右入れ替え）
+            KeyCode::F => {
+                debug!("F キーが押されました");
+                PageManager::toggle_flip_mode(state);
+            }
+
             // ページジャンプ
             Key::Named(iced::keyboard::key::Named::Home) => {
                 debug!("Home キーが押されました");
@@ -209,6 +215,7 @@ impl KeyboardHandler {
             KeyboardShortcut::new("1", "シングルページモード"),
             KeyboardShortcut::new("2", "ダブルページモード"),
             KeyboardShortcut::new("R", "回転モード切り替え"),
+            KeyboardShortcut::new("F", "フリップモード切り替え（左右入れ替え）"),
             KeyboardShortcut::new("Home", "最初のページ"),
             KeyboardShortcut::new("End", "最後のページ"),
             KeyboardShortcut::new("Page Up", "前のページ"),

@@ -40,8 +40,8 @@ impl ImageView {
         let handle_1 = Self::get_image_handle(state, state.current_file_index);
         let handle_2 = Self::get_image_handle(state, state.current_file_index + 1);
 
-        // 回転モードに応じて画像の順序を変更
-        let (left_handle, right_handle) = if state.rotate_mode {
+        // フリップモードに応じて画像の順序を変更（左右入れ替え）
+        let (left_handle, right_handle) = if state.flip_mode {
             (handle_2, handle_1)
         } else {
             (handle_1, handle_2)
