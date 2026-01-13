@@ -1,28 +1,126 @@
 use iced::widget::{button, column, container, text, row, Image};
 use iced::{Element, Subscription, Task, Theme, Event, Length, Alignment, Size};
 use iced::keyboard::{Event as KeyboardEvent, Key};
-use std::path::PathBuf;
 use log::debug;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use clap::Parser;
 
 // アーカイブ処理モジュールをインポート
 mod archive_reader;
 mod reader_zip;
 mod reader_rar4;
 mod reader_rar5;
+mod file_checker;
+mod sort_filename;
+mod compress_deflate;
+mod rar_handler;
 
 use archive_reader::{ArcReader, MemberFile, CompressionType, ArchiveResult};
 use reader_zip::ZipReader;
 use reader_rar4::Rar4Reader;
 use reader_rar5::Rar5Reader;
 
-fn main() -> iced::Result {
+// IPC module for single instance support
+mod ipc;
+
+// MVC modules (for AppState used in ImageViewer)
+mod model;
+mod view;
+mod controller;
+
+use model::app_state::AppState;
+
+/// Saten - Image Viewer for Archive Files
+#[derive(Parser, Debug)]
+#[command(name = "saten")]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to archive file to open (.rar, .zip, .cbr, .cbz)
+    #[arg(value_name = "FILE")]
+    file: Option<PathBuf>,
+}
+
+/// アプリケーションのメインエントリーポイント
+pub fn main() -> iced::Result {
+    // Parse command line arguments
+    let args = Args::parse();
+
+    // Try to become primary instance or send to existing instance
+    let (ipc_receiver, socket_path) = match ipc::try_become_primary(args.file.clone()) {
+        ipc::InstanceResult::Primary { receiver, socket_path } => {
+            (Some(receiver), Some(socket_path))
+        }
+        ipc::InstanceResult::Secondary => {
+            // Another instance is running, we sent the file path, now exit
+            println!("Another instance is already running. File path sent.");
+            std::process::exit(0);
+        }
+    };
+
+    // Wrap the receiver in Arc<Mutex<Option>> for sharing with iced subscription
+    let ipc_receiver_shared: Arc<Mutex<Option<mpsc::Receiver<PathBuf>>>> =
+        Arc::new(Mutex::new(ipc_receiver));
+
+    // Create flags to pass initial file path and IPC receiver
+    let flags = AppFlags {
+        initial_file: args.file,
+        ipc_receiver: ipc_receiver_shared,
+        socket_path,
+    };
+
     iced::application("Saten - 画像ビューア", ImageViewer::update, ImageViewer::view)
         .subscription(ImageViewer::subscription)
         .theme(|_| Theme::Dark)
         .window_size(Size::new(1200.0, 800.0))  // 初期ウィンドウサイズを設定
         .resizable(true)           // リサイズ可能
-        .run()
+        .run_with(move || {
+            // Create ImageViewer with IPC receiver and socket path
+            let viewer = ImageViewer {
+                ipc_receiver: flags.ipc_receiver,
+                socket_path: flags.socket_path,
+                ..ImageViewer::default()
+            };
+
+            // If initial file is provided, trigger file load
+            let task = if let Some(file_path) = flags.initial_file {
+                Task::done(Message::FileDropped(file_path))
+            } else {
+                Task::none()
+            };
+
+            (viewer, task)
+        })
 }
+
+/// Application initialization flags
+#[derive(Clone)]
+pub struct AppFlags {
+    pub initial_file: Option<PathBuf>,
+    pub ipc_receiver: Arc<Mutex<Option<mpsc::Receiver<PathBuf>>>>,
+    pub socket_path: Option<PathBuf>,
+}
+
+impl Default for AppFlags {
+    fn default() -> Self {
+        AppFlags {
+            initial_file: None,
+            ipc_receiver: Arc::new(Mutex::new(None)),
+            socket_path: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for AppFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppFlags")
+            .field("initial_file", &self.initial_file)
+            .field("socket_path", &self.socket_path)
+            .finish()
+    }
+}
+
 
 #[derive(Debug, Default, Clone)]
 pub enum DisplayMode {
@@ -40,7 +138,6 @@ impl std::fmt::Display for DisplayMode {
     }
 }
 
-#[derive(Default)]
 struct ImageViewer {
     // 基本状態
     current_file: Option<PathBuf>,
@@ -63,6 +160,20 @@ struct ImageViewer {
     
     // ウィンドウ情報
     window_size: Size,
+
+    // アプリケーションの状態管理（二重起動防止）
+    state: AppState,
+    ipc_receiver: Arc<Mutex<Option<mpsc::Receiver<PathBuf>>>>,
+    socket_path: Option<PathBuf>,
+}
+
+impl std::fmt::Debug for ImageViewer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageViewer")
+            .field("state", &self.state)
+            .field("socket_path", &self.socket_path)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +203,31 @@ enum Message {
     
     // ウィンドウイベント
     WindowResized(Size),
+
+    // IPC
+    IpcFileReceived(PathBuf),
+}
+
+impl Default for ImageViewer {
+    fn default() -> Self {
+        ImageViewer {
+            current_file: None,
+            status_message: String::new(),
+            archive_files: Vec::new(),
+            archive_buffer: Vec::new(),
+            current_file_index: 0,
+            total_files: 0,
+            display_mode: DisplayMode::default(),
+            rotate_mode: false,
+            fullsize_mode: false,
+            show_overlay: false,
+            image_handles: Vec::new(),
+            window_size: Size::new(1200.0, 800.0),
+            state: AppState::default(),
+            ipc_receiver: Arc::new(Mutex::new(None)),
+            socket_path: None,
+        }
+    }
 }
 
 impl ImageViewer {
@@ -239,15 +375,21 @@ impl ImageViewer {
                 if let Event::Window(iced::window::Event::FileDropped(path)) = event {
                     return self.update(Message::FileDropped(path));
                 }
-                
+
                 if let Event::Window(iced::window::Event::Resized(size)) = event {
                     return self.update(Message::WindowResized(size));
                 }
-                
+
                 // キーボードイベント処理
                 if let Event::Keyboard(KeyboardEvent::KeyPressed { key, modifiers, .. }) = event {
                     return self.handle_keyboard_input(key, modifiers);
                 }
+            }
+
+            Message::IpcFileReceived(path) => {
+                // IPCから受信したファイルパスを処理
+                debug!("IPCからファイルパスを受信: {:?}", path);
+                return self.update(Message::FileDropped(path));
             }
         }
         Task::none()
@@ -284,7 +426,14 @@ impl ImageViewer {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::event::listen().map(Message::EventOccurred)
+        // Use iced 0.13 event listening API
+        let event_sub = iced::event::listen().map(Message::EventOccurred);
+
+        // IPC subscription for receiving file paths from secondary instances
+        let ipc_sub = ipc::ipc_subscription(self.ipc_receiver.clone())
+            .map(Message::IpcFileReceived);
+
+        Subscription::batch([event_sub, ipc_sub])
     }
 
     // オーバーレイのみ表示を作成

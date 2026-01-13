@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use log::{info, warn, error, debug};
 use iced::Task;
 
@@ -12,6 +13,8 @@ pub enum Message {
     FileLoaded(Result<(Vec<u8>, Vec<crate::archive_reader::MemberFile>), String>),
     ShowError(String),
     ShowSuccess(String),
+    /// Received file path from IPC (secondary instance)
+    IpcFileReceived(PathBuf),
 }
 
 pub struct AppController;
@@ -40,6 +43,10 @@ impl AppController {
             Message::ShowSuccess(message) => {
                 info!("成功: {}", message);
                 Task::none()
+            }
+            Message::IpcFileReceived(path) => {
+                info!("IPCからファイルパスを受信: {:?}", path);
+                FileHandler::handle_file_drop(state, path)
             }
         }
     }
