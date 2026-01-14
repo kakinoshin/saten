@@ -71,7 +71,7 @@ impl KeyboardHandler {
             }
 
             // フリップモード切り替え（左右入れ替え）
-            KeyCode::F => {
+            Key::Character(ref c) if matches!(c.as_ref(), "f" | "F") => {
                 debug!("F キーが押されました");
                 PageManager::toggle_flip_mode(state);
             }

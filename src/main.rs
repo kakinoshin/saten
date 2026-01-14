@@ -151,9 +151,10 @@ struct ImageViewer {
     
     // 表示状態
     display_mode: DisplayMode,
-    rotate_mode: bool,
-    fullsize_mode: bool,  // フルサイズ表示モード
-    show_overlay: bool,   // オーバーレイ表示状態
+    rotation_angle: u16,    // 画像回転角度 (0, 90, 180, 270)
+    flip_mode: bool,        // フリップモード (左右入れ替え)
+    fullsize_mode: bool,    // フルサイズ表示モード
+    show_overlay: bool,     // オーバーレイ表示状態
     
     // 画像ハンドル
     image_handles: Vec<iced::widget::image::Handle>,
@@ -193,7 +194,8 @@ enum Message {
     // 表示モード
     SetSingleMode,
     SetDoubleMode,
-    ToggleRotate,
+    ToggleRotate,   // 画像回転 (90度)
+    ToggleFlip,     // 左右入れ替え
     ToggleFullsize,
     ToggleOverlay,  // オーバーレイ表示切り替え
     
@@ -218,7 +220,8 @@ impl Default for ImageViewer {
             current_file_index: 0,
             total_files: 0,
             display_mode: DisplayMode::default(),
-            rotate_mode: false,
+            rotation_angle: 0,
+            flip_mode: false,
             fullsize_mode: false,
             show_overlay: false,
             image_handles: Vec::new(),
@@ -321,8 +324,14 @@ impl ImageViewer {
                 return self.load_current_page_images();
             }
             Message::ToggleRotate => {
-                self.rotate_mode = !self.rotate_mode;
+                // Cycle through: 0 -> 90 -> 180 -> 270 -> 0
+                self.rotation_angle = (self.rotation_angle + 90) % 360;
+                debug!("回転角度: {}°", self.rotation_angle);
                 return self.load_current_page_images();
+            }
+            Message::ToggleFlip => {
+                self.flip_mode = !self.flip_mode;
+                debug!("フリップモード: {}", if self.flip_mode { "ON" } else { "OFF" });
             }
             Message::ToggleOverlay => {
                 self.show_overlay = !self.show_overlay;
@@ -455,7 +464,7 @@ impl ImageViewer {
             self.create_overlay_controls(),
             
             // キーボードヘルプ
-            text("[i] オーバーレイ切り替え [F] フルサイズ [ESC] 終了").size(12),
+            text("[R] 回転 [F] 左右入替 [Z] フルサイズ [i] オーバーレイ [ESC] 終了").size(12),
         ]
         .spacing(10)
         .padding(20);
@@ -491,9 +500,12 @@ impl ImageViewer {
             button("シングル").on_press(Message::SetSingleMode),
             button("ダブル").on_press(Message::SetDoubleMode),
             button("回転").on_press(Message::ToggleRotate),
+            button("左右入替").on_press(Message::ToggleFlip),
             button("フルサイズ").on_press(Message::ToggleFullsize),
-            text(format!("モード: {} {}", 
-                self.display_mode, 
+            text(format!("{} {} {} {}",
+                self.display_mode,
+                if self.rotation_angle > 0 { format!("[{}°]", self.rotation_angle) } else { String::new() },
+                if self.flip_mode { "[入替]" } else { "" },
                 if self.fullsize_mode { "[フルサイズ]" } else { "" }
             )).size(12),
         ]
@@ -534,8 +546,8 @@ impl ImageViewer {
             DisplayMode::Double => {
                 let mut row_content = row![].spacing(2);
 
-                // 左ページ（回転モードでは右ページ）
-                if let Some(handle) = self.image_handles.get(if self.rotate_mode { 1 } else { 0 }) {
+                // 左ページ（フリップモードでは右ページ）
+                if let Some(handle) = self.image_handles.get(if self.flip_mode { 1 } else { 0 }) {
                     row_content = row_content.push(
                         container(
                             Image::new(handle.clone())
@@ -555,8 +567,8 @@ impl ImageViewer {
                     );
                 }
 
-                // 右ページ（回転モードでは左ページ）
-                if let Some(handle) = self.image_handles.get(if self.rotate_mode { 0 } else { 1 }) {
+                // 右ページ（フリップモードでは左ページ）
+                if let Some(handle) = self.image_handles.get(if self.flip_mode { 0 } else { 1 }) {
                     row_content = row_content.push(
                         container(
                             Image::new(handle.clone())
@@ -612,6 +624,9 @@ impl ImageViewer {
                 return Task::perform(async {}, |_| Message::ToggleRotate);
             }
             Key::Character(ref c) if matches!(c.as_ref(), "f" | "F") => {
+                return Task::perform(async {}, |_| Message::ToggleFlip);
+            }
+            Key::Character(ref c) if matches!(c.as_ref(), "z" | "Z") => {
                 return Task::perform(async {}, |_| Message::ToggleFullsize);
             }
             Key::Character(ref c) if matches!(c.as_ref(), "i" | "I") => {
@@ -678,8 +693,9 @@ impl ImageViewer {
         }
 
         let buffer = self.archive_buffer.clone();
+        let rotation = self.rotation_angle;
         Task::perform(
-            Self::load_images_from_archive(buffer, files_to_load),
+            Self::load_images_from_archive(buffer, files_to_load, rotation),
             Message::ImagesLoaded
         )
     }
@@ -688,16 +704,17 @@ impl ImageViewer {
     async fn load_images_from_archive(
         buffer: Vec<u8>,
         files: Vec<MemberFile>,
+        rotation_angle: u16,
     ) -> Result<Vec<iced::widget::image::Handle>, String> {
         let mut handles = Vec::new();
-        
+
         for file in files {
-            match Self::extract_single_image_from_archive(&buffer, &file) {
+            match Self::extract_single_image_from_archive(&buffer, &file, rotation_angle) {
                 Ok(handle) => handles.push(handle),
                 Err(e) => return Err(e),
             }
         }
-        
+
         Ok(handles)
     }
 
@@ -705,29 +722,63 @@ impl ImageViewer {
     fn extract_single_image_from_archive(
         buffer: &[u8],
         file: &MemberFile,
+        rotation_angle: u16,
     ) -> Result<iced::widget::image::Handle, String> {
-        match file.ctype {
+        // まず画像データを取得
+        let image_data = match file.ctype {
             CompressionType::Uncompress => {
                 let start = file.offset as usize;
                 let end = start + file.size as usize;
-                
+
                 if end > buffer.len() {
                     return Err("ファイルサイズが範囲外です".to_string());
                 }
-                
-                let image_data = buffer[start..end].to_vec();
-                Ok(iced::widget::image::Handle::from_bytes(image_data))
+
+                buffer[start..end].to_vec()
             }
             CompressionType::Deflate => {
-                match Self::decompress_deflate(buffer, file.offset, file.size) {
-                    Ok(data) => Ok(iced::widget::image::Handle::from_bytes(data)),
-                    Err(e) => Err(format!("Deflate展開エラー: {}", e)),
-                }
+                Self::decompress_deflate(buffer, file.offset, file.size)?
             }
             _ => {
-                Err(format!("未対応の圧縮形式: {:?}", file.ctype))
+                return Err(format!("未対応の圧縮形式: {:?}", file.ctype));
             }
+        };
+
+        // 回転角度が0以外の場合、画像を回転
+        if rotation_angle > 0 {
+            Self::rotate_image(&image_data, rotation_angle)
+        } else {
+            Ok(iced::widget::image::Handle::from_bytes(image_data))
         }
+    }
+
+    // 画像を指定角度で回転 (90, 180, 270度)
+    fn rotate_image(image_data: &[u8], angle: u16) -> Result<iced::widget::image::Handle, String> {
+        use image::io::Reader as ImageReader;
+        use std::io::Cursor;
+
+        // 画像をデコード
+        let img = ImageReader::new(Cursor::new(image_data))
+            .with_guessed_format()
+            .map_err(|e| format!("画像フォーマット検出エラー: {}", e))?
+            .decode()
+            .map_err(|e| format!("画像デコードエラー: {}", e))?;
+
+        // 指定角度で回転
+        let rotated = match angle {
+            90 => img.rotate90(),
+            180 => img.rotate180(),
+            270 => img.rotate270(),
+            _ => img,  // 0度またはその他の場合は回転しない
+        };
+
+        // PNGとして再エンコード
+        let mut output = Vec::new();
+        let mut cursor = Cursor::new(&mut output);
+        rotated.write_to(&mut cursor, image::ImageFormat::Png)
+            .map_err(|e| format!("画像エンコードエラー: {}", e))?;
+
+        Ok(iced::widget::image::Handle::from_bytes(output))
     }
 
     // ページナビゲーション
