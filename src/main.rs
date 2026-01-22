@@ -72,28 +72,33 @@ pub fn main() -> iced::Result {
         socket_path,
     };
 
-    iced::application("Saten - 画像ビューア", ImageViewer::update, ImageViewer::view)
-        .subscription(ImageViewer::subscription)
-        .theme(|_| Theme::Dark)
-        .window_size(Size::new(1200.0, 800.0))  // 初期ウィンドウサイズを設定
-        .resizable(true)           // リサイズ可能
-        .run_with(move || {
+    iced::application(
+        move || {
             // Create ImageViewer with IPC receiver and socket path
             let viewer = ImageViewer {
-                ipc_receiver: flags.ipc_receiver,
-                socket_path: flags.socket_path,
+                ipc_receiver: flags.ipc_receiver.clone(),
+                socket_path: flags.socket_path.clone(),
                 ..ImageViewer::default()
             };
 
             // If initial file is provided, trigger file load
-            let task = if let Some(file_path) = flags.initial_file {
+            let task = if let Some(file_path) = flags.initial_file.clone() {
                 Task::done(Message::FileDropped(file_path))
             } else {
                 Task::none()
             };
 
             (viewer, task)
-        })
+        },
+        ImageViewer::update,
+        ImageViewer::view,
+    )
+        .title("Saten - 画像ビューア")
+        .subscription(ImageViewer::subscription)
+        .theme(ImageViewer::theme)
+        .window_size(Size::new(1200.0, 800.0))
+        .resizable(true)
+        .run()
 }
 
 /// Application initialization flags
@@ -234,6 +239,10 @@ impl Default for ImageViewer {
 }
 
 impl ImageViewer {
+    fn theme(&self) -> Theme {
+        Theme::Dark
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::FileDropped(path) => {
@@ -403,7 +412,7 @@ impl ImageViewer {
         Task::none()
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         // 画像表示エリア
         if !self.image_handles.is_empty() {
             if self.show_overlay {
@@ -445,7 +454,7 @@ impl ImageViewer {
     }
 
     // オーバーレイのみ表示を作成
-    fn create_overlay_only_view(&self) -> Element<Message> {
+    fn create_overlay_only_view(&self) -> Element<'_, Message> {
         let status_text = if self.status_message.is_empty() {
             "Saten - 画像ビューア"
         } else {
@@ -478,7 +487,7 @@ impl ImageViewer {
     }
     
     // オーバーレイ用のコントロールを作成
-    fn create_overlay_controls(&self) -> Element<Message> {
+    fn create_overlay_controls(&self) -> Element<'_, Message> {
         let page_info = self.get_page_info_string();
         
         let nav_controls = row![
@@ -521,7 +530,7 @@ impl ImageViewer {
     }
 
     // 画像表示エリアを作成
-    fn create_image_display_area(&self) -> Element<Message> {
+    fn create_image_display_area(&self) -> Element<'_, Message> {
         match self.display_mode {
             DisplayMode::Single => {
                 if let Some(handle) = self.image_handles.first() {

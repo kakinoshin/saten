@@ -65,7 +65,7 @@ impl LayoutHelper {
     }
 
     /// 見出しテキストを作成
-    pub fn create_heading(text: &str, size: u16) -> Text<'static> {
+    pub fn create_heading(text: &str, size: f32) -> Text<'static> {
         Text::new(text.to_string())  // 借用データを所有データに変換
             .size(size)
     }
@@ -78,12 +78,12 @@ impl LayoutHelper {
 
     /// スペーサーを作成
     pub fn create_spacer(size: u16) -> Space {
-        Space::with_height(Length::Fixed(size as f32))
+        Space::new().height(Length::Fixed(size as f32))
     }
 
     /// 分割線を作成
     pub fn create_divider() -> Container<'static, Message> {
-        Container::new(Space::with_height(Length::Fixed(1.0)))
+        Container::new(Space::new().height(Length::Fixed(1.0)))
             .width(Length::Fill)
     }
 
@@ -95,7 +95,7 @@ impl LayoutHelper {
     where
         T: Into<Element<'static, Message>>,
     {
-        let title_text = Self::create_heading(title, 16);
+        let title_text = Self::create_heading(title, 16.0);
         let panel_content = Self::vertical_layout()
             .push(title_text)
             .push(Self::create_spacer(8))
@@ -179,7 +179,7 @@ impl LayoutHelper {
     /// レスポンシブなコンテナを作成
     pub fn create_responsive_container<T>(
         content: T,
-        max_width: u16
+        max_width: u32
     ) -> Container<'static, Message>
     where
         T: Into<Element<'static, Message>>,

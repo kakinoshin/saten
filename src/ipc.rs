@@ -154,41 +154,44 @@ pub fn cleanup_socket(socket_path: &PathBuf) {
 /// Type alias for the IPC receiver
 type IpcReceiverType = std::sync::Arc<std::sync::Mutex<Option<mpsc::Receiver<PathBuf>>>>;
 
+/// Wrapper for hashing the receiver (uses pointer address)
+#[derive(Clone)]
+struct IpcReceiverWrapper(IpcReceiverType);
+
+impl std::hash::Hash for IpcReceiverWrapper {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::sync::Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
 /// Create an iced subscription for IPC file reception
 pub fn ipc_subscription(
     receiver: IpcReceiverType
 ) -> iced::Subscription<PathBuf> {
-    struct IpcWorker {
-        receiver: IpcReceiverType,
-    }
+    iced::Subscription::run_with(
+        IpcReceiverWrapper(receiver),
+        |wrapper: &IpcReceiverWrapper| {
+            let receiver = wrapper.0.clone();
+            futures::stream::unfold(receiver, |receiver: IpcReceiverType| async move {
+                loop {
+                    // Check for new file paths
+                    let path: Option<PathBuf> = {
+                        let guard = receiver.lock().unwrap();
+                        if let Some(ref rx) = *guard {
+                            rx.try_recv().ok()
+                        } else {
+                            None
+                        }
+                    };
 
-    impl IpcWorker {
-        fn new(receiver: IpcReceiverType) -> Self {
-            Self { receiver }
-        }
-    }
-
-    iced::Subscription::run_with_id(
-        std::any::TypeId::of::<IpcWorker>(),
-        futures::stream::unfold(receiver, |receiver: IpcReceiverType| async move {
-            loop {
-                // Check for new file paths
-                let path: Option<PathBuf> = {
-                    let guard = receiver.lock().unwrap();
-                    if let Some(ref rx) = *guard {
-                        rx.try_recv().ok()
-                    } else {
-                        None
+                    if let Some(path) = path {
+                        return Some((path, receiver));
                     }
-                };
 
-                if let Some(path) = path {
-                    return Some((path, receiver));
+                    // Yield to prevent busy loop
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
-
-                // Yield to prevent busy loop
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-        })
+            })
+        }
     )
 }
