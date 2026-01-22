@@ -226,7 +226,7 @@ impl Default for ImageViewer {
             total_files: 0,
             display_mode: DisplayMode::default(),
             rotation_angle: 0,
-            flip_mode: false,
+            flip_mode: true,  // デフォルトでフリップモード（右から左へ読む）
             fullsize_mode: false,
             show_overlay: false,
             image_handles: Vec::new(),
