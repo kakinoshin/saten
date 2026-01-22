@@ -93,7 +93,7 @@ pub fn main() -> iced::Result {
         ImageViewer::update,
         ImageViewer::view,
     )
-        .title("Saten - 画像ビューア")
+        .title(ImageViewer::title)
         .subscription(ImageViewer::subscription)
         .theme(ImageViewer::theme)
         .window_size(Size::new(1200.0, 800.0))
@@ -239,6 +239,15 @@ impl Default for ImageViewer {
 }
 
 impl ImageViewer {
+    fn title(&self) -> String {
+        // 現在表示中の画像ファイル名を表示（ダブルビューでは1枚目）
+        if let Some(file) = self.archive_files.get(self.current_file_index) {
+            format!("Saten - {}", file.filename)
+        } else {
+            "Saten".to_string()
+        }
+    }
+
     fn theme(&self) -> Theme {
         Theme::Dark
     }
@@ -460,23 +469,30 @@ impl ImageViewer {
         } else {
             &self.status_message
         };
-        
+
+        // 現在表示中の画像パス情報を取得
+        let image_path_info = self.get_current_image_paths();
+
         // オーバーレイ内容
         let overlay_content = column![
             // ヘッダー情報
             text("Saten - 画像ビューア").size(24),
             text(status_text).size(16),
             text("").size(10), // スペーサー
-            
+
+            // 現在の画像パス情報
+            text(image_path_info).size(12),
+            text("").size(10), // スペーサー
+
             // コントロール
             self.create_overlay_controls(),
-            
+
             // キーボードヘルプ
             text("[R] 回転 [F] 左右入替 [Z] フルサイズ [i] オーバーレイ [ESC] 終了").size(12),
         ]
         .spacing(10)
         .padding(20);
-        
+
         // オーバーレイのみ表示
         container(overlay_content)
             .width(Length::Fill)
@@ -484,6 +500,33 @@ impl ImageViewer {
             .align_x(Alignment::Center)
             .align_y(Alignment::Center)
             .into()
+    }
+
+    // 現在表示中の画像パスを取得
+    fn get_current_image_paths(&self) -> String {
+        if self.archive_files.is_empty() {
+            return "画像なし".to_string();
+        }
+
+        match self.display_mode {
+            DisplayMode::Single => {
+                if let Some(file) = self.archive_files.get(self.current_file_index) {
+                    format!("📄 {}", file.filepath)
+                } else {
+                    "画像なし".to_string()
+                }
+            }
+            DisplayMode::Double => {
+                let mut paths = Vec::new();
+                if let Some(file) = self.archive_files.get(self.current_file_index) {
+                    paths.push(format!("📄 {}", file.filepath));
+                }
+                if let Some(file) = self.archive_files.get(self.current_file_index + 1) {
+                    paths.push(format!("📄 {}", file.filepath));
+                }
+                paths.join("\n")
+            }
+        }
     }
     
     // オーバーレイ用のコントロールを作成
