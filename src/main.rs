@@ -5,7 +5,9 @@ use log::debug;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::fs::File;
 use clap::Parser;
+use memmap2::Mmap;
 
 // アーカイブ処理モジュールをインポート
 mod archive_reader;
@@ -142,10 +144,9 @@ struct ImageViewer {
     // 基本状態
     current_file: Option<PathBuf>,
     status_message: String,
-    
+
     // アーカイブ関連
     archive_files: Vec<MemberFile>,
-    archive_buffer: Vec<u8>,
     current_file_index: usize,
     total_files: usize,
     
@@ -182,7 +183,7 @@ enum Message {
     FileDropped(PathBuf),
     ClearFile,
     EventOccurred(Event),
-    ArchiveLoaded(Result<(Vec<u8>, Vec<MemberFile>), String>),
+    ArchiveLoaded(Result<Vec<MemberFile>, String>),
     ImagesLoaded(Result<Vec<iced::widget::image::Handle>, String>),
     
     // ナビゲーション
@@ -216,7 +217,6 @@ impl Default for ImageViewer {
             current_file: None,
             status_message: String::new(),
             archive_files: Vec::new(),
-            archive_buffer: Vec::new(),
             current_file_index: 0,
             total_files: 0,
             display_mode: DisplayMode::default(),
@@ -255,7 +255,7 @@ impl ImageViewer {
             
             Message::ArchiveLoaded(result) => {
                 match result {
-                    Ok((buffer, files)) => {
+                    Ok(files) => {
                         let image_files: Vec<MemberFile> = files
                             .into_iter()
                             .filter(|f| Self::is_image_filename(&f.filename))
@@ -264,12 +264,11 @@ impl ImageViewer {
                         if image_files.is_empty() {
                             self.status_message = "画像ファイルが見つかりません".to_string();
                         } else {
-                            self.archive_buffer = buffer;
                             self.archive_files = image_files;
                             self.total_files = self.archive_files.len();
                             self.current_file_index = 0;
                             self.status_message = format!("{}個の画像を読み込みました", self.total_files);
-                            
+
                             // 現在のページの画像を読み込み
                             return self.load_current_page_images();
                         }
@@ -664,7 +663,7 @@ impl ImageViewer {
 
     // 現在のページの画像を読み込み
     fn load_current_page_images(&self) -> Task<Message> {
-        if self.archive_files.is_empty() {
+        if self.archive_files.is_empty() || self.current_file.is_none() {
             return Task::none();
         }
 
@@ -692,24 +691,30 @@ impl ImageViewer {
             return Task::none();
         }
 
-        let buffer = self.archive_buffer.clone();
+        let path = self.current_file.clone().unwrap();
         let rotation = self.rotation_angle;
         Task::perform(
-            Self::load_images_from_archive(buffer, files_to_load, rotation),
+            Self::load_images_from_archive(path, files_to_load, rotation),
             Message::ImagesLoaded
         )
     }
 
-    // アーカイブから複数画像を読み込み
+    // アーカイブから複数画像を読み込み (メモリマップ使用)
     async fn load_images_from_archive(
-        buffer: Vec<u8>,
+        path: PathBuf,
         files: Vec<MemberFile>,
         rotation_angle: u16,
     ) -> Result<Vec<iced::widget::image::Handle>, String> {
+        // メモリマップでファイルを開く（必要な部分のみがメモリに読み込まれる）
+        let file = File::open(&path)
+            .map_err(|e| format!("ファイルオープンエラー: {}", e))?;
+        let mmap = unsafe { Mmap::map(&file) }
+            .map_err(|e| format!("メモリマップエラー: {}", e))?;
+
         let mut handles = Vec::new();
 
-        for file in files {
-            match Self::extract_single_image_from_archive(&buffer, &file, rotation_angle) {
+        for member_file in files {
+            match Self::extract_single_image_from_archive(&mmap, &member_file, rotation_angle) {
                 Ok(handle) => handles.push(handle),
                 Err(e) => return Err(e),
             }
@@ -718,12 +723,19 @@ impl ImageViewer {
         Ok(handles)
     }
 
-    // アーカイブから単一画像を抽出
+    // GPU メモリ節約のための最大画像サイズ (ピクセル)
+    const MAX_IMAGE_DIMENSION: u32 = 4096;
+
+    // アーカイブから単一画像を抽出 (大きな画像はリサイズ)
     fn extract_single_image_from_archive(
         buffer: &[u8],
         file: &MemberFile,
         rotation_angle: u16,
     ) -> Result<iced::widget::image::Handle, String> {
+        use image::io::Reader as ImageReader;
+        use image::GenericImageView;
+        use std::io::Cursor;
+
         // まず画像データを取得
         let image_data = match file.ctype {
             CompressionType::Uncompress => {
@@ -734,28 +746,16 @@ impl ImageViewer {
                     return Err("ファイルサイズが範囲外です".to_string());
                 }
 
-                buffer[start..end].to_vec()
+                &buffer[start..end]
             }
             CompressionType::Deflate => {
-                Self::decompress_deflate(buffer, file.offset, file.size)?
+                // Deflate の場合は一時バッファに展開
+                return Self::extract_deflate_image(buffer, file, rotation_angle);
             }
             _ => {
                 return Err(format!("未対応の圧縮形式: {:?}", file.ctype));
             }
         };
-
-        // 回転角度が0以外の場合、画像を回転
-        if rotation_angle > 0 {
-            Self::rotate_image(&image_data, rotation_angle)
-        } else {
-            Ok(iced::widget::image::Handle::from_bytes(image_data))
-        }
-    }
-
-    // 画像を指定角度で回転 (90, 180, 270度)
-    fn rotate_image(image_data: &[u8], angle: u16) -> Result<iced::widget::image::Handle, String> {
-        use image::io::Reader as ImageReader;
-        use std::io::Cursor;
 
         // 画像をデコード
         let img = ImageReader::new(Cursor::new(image_data))
@@ -764,18 +764,80 @@ impl ImageViewer {
             .decode()
             .map_err(|e| format!("画像デコードエラー: {}", e))?;
 
-        // 指定角度で回転
-        let rotated = match angle {
+        // 回転処理
+        let img = match rotation_angle {
             90 => img.rotate90(),
             180 => img.rotate180(),
             270 => img.rotate270(),
-            _ => img,  // 0度またはその他の場合は回転しない
+            _ => img,
         };
 
-        // PNGとして再エンコード
+        // 画像サイズをチェックしてリサイズ
+        let (width, height) = img.dimensions();
+        let img = if width > Self::MAX_IMAGE_DIMENSION || height > Self::MAX_IMAGE_DIMENSION {
+            debug!("画像リサイズ: {}x{} -> max {}", width, height, Self::MAX_IMAGE_DIMENSION);
+            img.resize(
+                Self::MAX_IMAGE_DIMENSION,
+                Self::MAX_IMAGE_DIMENSION,
+                image::imageops::FilterType::Triangle,
+            )
+        } else {
+            img
+        };
+
+        // JPEG としてエンコード (PNG より軽量)
         let mut output = Vec::new();
         let mut cursor = Cursor::new(&mut output);
-        rotated.write_to(&mut cursor, image::ImageFormat::Png)
+        img.write_to(&mut cursor, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("画像エンコードエラー: {}", e))?;
+
+        Ok(iced::widget::image::Handle::from_bytes(output))
+    }
+
+    // Deflate 圧縮された画像を抽出
+    fn extract_deflate_image(
+        buffer: &[u8],
+        file: &MemberFile,
+        rotation_angle: u16,
+    ) -> Result<iced::widget::image::Handle, String> {
+        use image::io::Reader as ImageReader;
+        use image::GenericImageView;
+        use std::io::Cursor;
+
+        let decompressed = Self::decompress_deflate(buffer, file.offset, file.size)?;
+
+        // 画像をデコード
+        let img = ImageReader::new(Cursor::new(&decompressed))
+            .with_guessed_format()
+            .map_err(|e| format!("画像フォーマット検出エラー: {}", e))?
+            .decode()
+            .map_err(|e| format!("画像デコードエラー: {}", e))?;
+
+        // 回転処理
+        let img = match rotation_angle {
+            90 => img.rotate90(),
+            180 => img.rotate180(),
+            270 => img.rotate270(),
+            _ => img,
+        };
+
+        // 画像サイズをチェックしてリサイズ
+        let (width, height) = img.dimensions();
+        let img = if width > Self::MAX_IMAGE_DIMENSION || height > Self::MAX_IMAGE_DIMENSION {
+            debug!("画像リサイズ: {}x{} -> max {}", width, height, Self::MAX_IMAGE_DIMENSION);
+            img.resize(
+                Self::MAX_IMAGE_DIMENSION,
+                Self::MAX_IMAGE_DIMENSION,
+                image::imageops::FilterType::Triangle,
+            )
+        } else {
+            img
+        };
+
+        // JPEG としてエンコード
+        let mut output = Vec::new();
+        let mut cursor = Cursor::new(&mut output);
+        img.write_to(&mut cursor, image::ImageFormat::Jpeg)
             .map_err(|e| format!("画像エンコードエラー: {}", e))?;
 
         Ok(iced::widget::image::Handle::from_bytes(output))
@@ -900,10 +962,13 @@ impl ImageViewer {
         Ok(decompressed)
     }
 
-    // アーカイブファイルを読み込む
-    async fn load_archive(path: PathBuf) -> Result<(Vec<u8>, Vec<MemberFile>), String> {
-        let buffer = std::fs::read(&path)
-            .map_err(|e| format!("ファイル読み込みエラー: {}", e))?;
+    // アーカイブファイルを読み込む (メモリマップ使用でメタデータのみ解析)
+    async fn load_archive(path: PathBuf) -> Result<Vec<MemberFile>, String> {
+        // メモリマップでファイルを開く（ヘッダー解析に必要な部分のみメモリに読み込まれる）
+        let file = File::open(&path)
+            .map_err(|e| format!("ファイルオープンエラー: {}", e))?;
+        let mmap = unsafe { Mmap::map(&file) }
+            .map_err(|e| format!("メモリマップエラー: {}", e))?;
 
         let mut files = Vec::new();
 
@@ -911,12 +976,12 @@ impl ImageViewer {
             if let Some(ext_str) = extension.to_str() {
                 let ext_lower = ext_str.to_lowercase();
                 let result = match ext_lower.as_str() {
-                    "zip" | "cbz" => ZipReader::read_archive(&buffer, &mut files),
+                    "zip" | "cbz" => ZipReader::read_archive(&mmap, &mut files),
                     "rar" | "cbr" => {
-                        if Self::is_rar5(&buffer) {
-                            Rar5Reader::read_archive(&buffer, &mut files)
+                        if Self::is_rar5(&mmap) {
+                            Rar5Reader::read_archive(&mmap, &mut files)
                         } else {
-                            Rar4Reader::read_archive(&buffer, &mut files)
+                            Rar4Reader::read_archive(&mmap, &mut files)
                         }
                     }
                     _ => return Err("サポートされていないアーカイブ形式".to_string()),
@@ -930,13 +995,13 @@ impl ImageViewer {
             return Err("アーカイブ内にファイルが見つかりません".to_string());
         }
 
-        Ok((buffer, files))
+        Ok(files)
     }
 
-    // 単一画像をアーカイブとして読み込む
-    async fn load_single_image_as_archive(path: PathBuf) -> Result<(Vec<u8>, Vec<MemberFile>), String> {
-        let buffer = std::fs::read(&path)
-            .map_err(|e| format!("ファイル読み込みエラー: {}", e))?;
+    // 単一画像をアーカイブとして読み込む (メタデータのみ取得)
+    async fn load_single_image_as_archive(path: PathBuf) -> Result<Vec<MemberFile>, String> {
+        let metadata = std::fs::metadata(&path)
+            .map_err(|e| format!("ファイルメタデータ取得エラー: {}", e))?;
 
         let filename = path.file_name()
             .and_then(|n| n.to_str())
@@ -947,12 +1012,12 @@ impl ImageViewer {
             filepath: filename.clone(),
             filename,
             offset: 0,
-            size: buffer.len() as u64,
-            fsize: buffer.len() as u64,
+            size: metadata.len(),
+            fsize: metadata.len(),
             ctype: CompressionType::Uncompress,
         };
 
-        Ok((buffer, vec![member_file]))
+        Ok(vec![member_file])
     }
 
     // RAR5かどうかを判定

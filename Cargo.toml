@@ -35,7 +35,7 @@ env_logger = { version = "0.10", optional = true }   # ログ出力の改善
 
 # パフォーマンス最適化
 rayon = { version = "1.7", optional = true }         # 並列処理
-memmap2 = { version = "0.7", optional = true }       # メモリマップファイル
+memmap2 = "0.7"       # メモリマップファイル
 
 [features]
 default = []
