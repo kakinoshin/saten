@@ -462,6 +462,9 @@ impl ImageViewer {
         Subscription::batch([event_sub, ipc_sub])
     }
 
+    // バージョン情報（コンパイル時にCargo.tomlから取得）
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
     // オーバーレイのみ表示を作成
     fn create_overlay_only_view(&self) -> Element<'_, Message> {
         let status_text = if self.status_message.is_empty() {
@@ -473,10 +476,14 @@ impl ImageViewer {
         // 現在表示中の画像パス情報を取得
         let image_path_info = self.get_current_image_paths();
 
+        // バージョン情報
+        let version_info = format!("Version {}", Self::VERSION);
+
         // オーバーレイ内容
         let overlay_content = column![
             // ヘッダー情報
             text("Saten - 画像ビューア").size(24),
+            text(version_info).size(14),
             text(status_text).size(16),
             text("").size(10), // スペーサー
 
